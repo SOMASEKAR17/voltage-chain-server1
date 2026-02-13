@@ -16,3 +16,24 @@ const ABI = [
   "function ownerOf(uint256 tokenId) public view returns (address)"
 ];
 
+const provider = new ethers.JsonRpcProvider(RPC_URL);
+const wallet = new ethers.Wallet(PRIVATE_KEY, provider);
+const contract = new ethers.Contract(CONTRACT_ADDRESS, ABI, wallet);
+
+export const mintBatteryNFT = async (
+  batteryCode: string,
+  ownerWallet: string,
+  cid: string
+) => {
+  const tx = await contract.mintBatteryNFT(ownerWallet, cid);
+  const receipt = await tx.wait();
+
+  const event = receipt.logs.find((log: any) => log.fragment?.name === "Transfer");
+  const tokenId = event?.args?.tokenId?.toString();
+
+  return {
+    tokenId,
+    txHash: tx.hash,
+  };
+};
+
