@@ -1,9 +1,9 @@
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 CREATE SCHEMA IF NOT EXISTS public;
 
--- ========================
--- Batteries
--- ========================
+
+
+
 CREATE TABLE public.batteries (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
 
@@ -14,7 +14,7 @@ CREATE TABLE public.batteries (
     current_capacity numeric(6,2),
     manufacture_year int,
     charging_cycles int,
-    
+
 
     nft_token_id text,
     minted boolean DEFAULT false,
@@ -22,9 +22,9 @@ CREATE TABLE public.batteries (
     created_at timestamp DEFAULT CURRENT_TIMESTAMP
 );
 
--- ========================
--- Users
--- ========================
+
+
+
 CREATE TABLE public.users (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
 
@@ -37,9 +37,9 @@ CREATE TABLE public.users (
     created_at timestamp DEFAULT CURRENT_TIMESTAMP
 );
 
--- ========================
--- Battery History
--- ========================
+
+
+
 CREATE TABLE public.battery_history (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
 
@@ -56,9 +56,9 @@ CREATE TABLE public.battery_history (
     created_at timestamp DEFAULT CURRENT_TIMESTAMP
 );
 
--- ========================
--- Listings
--- ========================
+
+
+
 CREATE TABLE public.listings (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
 
@@ -78,9 +78,9 @@ CREATE TABLE public.listings (
     created_at timestamp DEFAULT CURRENT_TIMESTAMP
 );
 
--- ========================
--- Usage Surveys
--- ========================
+
+
+
 CREATE TABLE public.usage_surveys (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
 
@@ -95,9 +95,9 @@ CREATE TABLE public.usage_surveys (
     created_at timestamp DEFAULT CURRENT_TIMESTAMP
 );
 
--- ========================
--- OCR Records
--- ========================
+
+
+
 CREATE TABLE public.ocr_records (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
 
@@ -112,9 +112,9 @@ CREATE TABLE public.ocr_records (
     created_at timestamp DEFAULT CURRENT_TIMESTAMP
 );
 
--- ========================
--- AI Evaluations
--- ========================
+
+
+
 CREATE TABLE public.ai_evaluations (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
 
