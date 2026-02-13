@@ -1,10 +1,10 @@
-import { Router, Request, Response } from 'express';
+import { Router } from 'express';
+import { getBattery, createBattery, listBattery } from '../controllers/batteryController';
 
 const router = Router();
 
-// Basic health endpoint for battery routes
-router.get('/', (req: Request, res: Response) => {
-  res.json({ message: 'Battery routes placeholder' });
-});
+router.get('/:id', getBattery);
+router.post('/', createBattery);
+router.post('/list', listBattery);
 
 export default router;

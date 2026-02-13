@@ -1,10 +1,9 @@
-import { Router, Request, Response } from 'express';
+import { Router } from 'express';
+import { scanLabel } from '../controllers/ocrController';
+import { uploadMiddleware, handleUploadError } from '../middleware/upload.middleware';
 
 const router = Router();
 
-// Basic health endpoint for OCR routes
-router.get('/', (req: Request, res: Response) => {
-  res.json({ message: 'OCR routes placeholder' });
-});
+router.post('/scan-label', uploadMiddleware, handleUploadError, scanLabel);
 
 export default router;
