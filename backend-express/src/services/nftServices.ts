@@ -45,3 +45,22 @@ export const updateBatteryMetadata = async (
   await tx.wait();
   return tx.hash;
 };
+
+export const transferBatteryNFT = async (
+  tokenId: string,
+  from: string,
+  to: string
+) => {
+  const tx = await contract.safeTransferFrom(from, to, tokenId);
+  await tx.wait();
+  return tx.hash;
+};
+
+export const burnBatteryNFT = async (
+  tokenId: string
+) => {
+  const tx = await contract.burn(tokenId);
+  await tx.wait();
+  return tx.hash;
+};
+
