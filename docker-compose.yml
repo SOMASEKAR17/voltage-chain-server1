@@ -1,7 +1,7 @@
 services:
   postgres:
     image: postgres:16
-    container_name: postgres_local
+    container_name: postgres_container
     environment:
       POSTGRES_USER: hack
       POSTGRES_PASSWORD: hackpass
