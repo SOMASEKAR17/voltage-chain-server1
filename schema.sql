@@ -80,24 +80,41 @@ CREATE TABLE public.listings (
 );
 
 
-
-
-CREATE TABLE public.usage_surveys (
+CREATE TABLE public.user_surveys (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
 
-    listing_id uuid REFERENCES public.listings(id),
+    listing_id uuid NOT NULL
+        REFERENCES public.listings(id)
+        ON DELETE CASCADE,
 
-    years_used int,
-    first_owner boolean,
+    brand_model text NOT NULL,
 
-    use_case text,
-    charging_frequency text,
+    initial_capacity_ah numeric(8,2) NOT NULL
+        CHECK (initial_capacity_ah > 0),
+
+    current_capacity_ah numeric(8,2) NOT NULL
+        CHECK (current_capacity_ah > 0),
+
+    years_owned int NOT NULL
+        CHECK (years_owned >= 0),
+
+    primary_application text NOT NULL
+        CHECK (primary_application IN ('E-bike', 'E-car')),
+
+    avg_daily_usage text NOT NULL
+        CHECK (avg_daily_usage IN ('Light', 'Medium', 'Heavy')),
+
+    charging_frequency_per_week smallint NOT NULL
+        CHECK (charging_frequency_per_week >= 0),
+
+    typical_charge_level text NOT NULL
+        CHECK (typical_charge_level IN ('20-80', '0-100', 'Always Full')),
+
+    avg_temperature_c numeric(5,2)
+        CHECK (avg_temperature_c BETWEEN -30 AND 100),
 
     created_at timestamp DEFAULT CURRENT_TIMESTAMP
 );
-
-
-
 
 CREATE TABLE public.ocr_records (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),

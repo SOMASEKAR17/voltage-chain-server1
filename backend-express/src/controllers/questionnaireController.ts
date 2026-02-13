@@ -10,6 +10,11 @@ export const createQuestionnaire: RequestHandler = async (req, res, next) => {
         if (!listingId) {
             return res.status(400).json({ error: 'listing_id is required' });
         }
+        const required = ['brand_model', 'initial_capacity_ah', 'current_capacity_ah', 'years_owned', 'primary_application', 'avg_daily_usage', 'charging_frequency_per_week', 'typical_charge_level'];
+        const missing = required.filter((k) => questionnaire[k as keyof QuestionnaireData] == null || questionnaire[k as keyof QuestionnaireData] === '');
+        if (missing.length > 0) {
+            return res.status(400).json({ error: 'Missing required fields', required: missing });
+        }
         const listing = await listingService.getListingById(listingId);
         if (!listing) {
             return res.status(404).json({ error: 'Listing not found' });

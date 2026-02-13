@@ -10,9 +10,19 @@ All responses are JSON. Unless noted, errors return an object like:
 
 **Test data setup**
 
-Load sample data before testing:
+**Docker** (postgres + app):
 
 ```bash
+docker compose up -d
+# Apply schema and seed (from project root)
+docker compose exec -T postgres psql -U hack -d localdb < schema.sql
+docker compose exec -T postgres psql -U hack -d localdb < sample.sql
+```
+
+**Local**: Load sample data before testing:
+
+```bash
+psql -U hack -d localdb -f schema.sql
 psql -U hack -d localdb -f sample.sql
 ```
 
@@ -23,7 +33,7 @@ After loading, you get:
 | **users** | arjun.kumar@gmail.com (0xA111AAA111), neha.sharma@gmail.com (0xB222BBB222), rohit.verma@gmail.com (0xC333CCC333) |
 | **batteries** | BAT-1001 (Exide, 100Ah), BAT-1002 (Amaron, 120Ah, NFT-88921), BAT-1003 (Tata Green, 95Ah) |
 | **listings** | BAT-1001→active ₹4500, BAT-1002→draft ₹5200, BAT-1003→sold ₹3800 |
-| **usage_surveys** | Electric Scooter/Daily (active), Solar Backup/Weekly (sold) |
+| **user_surveys** | Exide BAT-1001 / E-bike / Medium (active), Tata Green / E-car / Heavy (sold) |
 | **ocr_records** | Exide 12V 100Ah, Amaron 12V 120Ah |
 | **user_wallets** | 0xAAA111, 0xBBB222, 0xCCC333 |
 
@@ -104,11 +114,7 @@ Use `GET /api/listings` or `GET /api/battery/:id` to get real UUIDs for path par
     - `manufacture_year` (number, required)
     - `charging_cycles` (number, optional)
     - `owner_wallet` (string, required)
-    - `questionnaire` (optional object):
-      - `years_used` (number, optional)
-      - `first_owner` (boolean, optional)
-      - `use_case` (string, optional)
-      - `charging_frequency` (string, optional)
+    - `questionnaire` (optional partial `QuestionnaireData`): `brand_model`, `initial_capacity_ah`, `current_capacity_ah`, `years_owned`, `primary_application` (E-bike, E-car), `avg_daily_usage` (Light, Medium, Heavy), `charging_frequency_per_week`, `typical_charge_level` (20-80, 0-100, Always Full); optional `avg_temperature_c`. Defaults filled from battery when omitted.
   - **Validation**:
     - Missing any of: `battery_code`, `brand`, `initial_capacity`, `current_capacity`, `manufacture_year`, `owner_wallet`
       - → `400` with:
@@ -118,7 +124,7 @@ Use `GET /api/listings` or `GET /api/battery/:id` to get real UUIDs for path par
     - Creates battery row in `public.batteries`.
     - Mints or updates NFT via `nftService`.
     - Records history event in `public.battery_history`.
-    - If a listing exists for this battery and `questionnaire` is provided, creates/updates a `usage_surveys` record.
+    - If a listing exists for this battery and `questionnaire` is provided, creates/updates a `user_surveys` record.
   - **Response** (`200`):
     ```json
     {
@@ -149,10 +155,11 @@ Use `GET /api/listings` or `GET /api/battery/:id` to get real UUIDs for path par
         "charging_cycles": 320,
         "owner_wallet": "0xA111AAA111",
         "questionnaire": {
-          "years_used": 2,
-          "first_owner": true,
-          "use_case": "Electric Scooter",
-          "charging_frequency": "Daily"
+          "years_owned": 2,
+          "primary_application": "E-bike",
+          "avg_daily_usage": "Medium",
+          "charging_frequency_per_week": 7,
+          "typical_charge_level": "20-80"
         }
       }'
     ```
@@ -255,38 +262,38 @@ Use `GET /api/listings` or `GET /api/battery/:id` to get real UUIDs for path par
 ### 4. Questionnaire APIs (`/api/questionnaire`)
 
 - **POST** `/api/questionnaire/:listing_id`
-  - **Purpose**: Create or update a usage questionnaire for a listing.
+  - **Purpose**: Create or update a user survey (battery usage questionnaire) for a listing.
   - **Path params**:
     - `listing_id` (string, required): listing UUID.
-  - **Body (JSON)** `QuestionnaireData`:
-    - `years_used` (number, optional)
-    - `first_owner` (boolean, optional)
-    - `use_case` (string, optional)
-    - `charging_frequency` (string, optional)
+  - **Body (JSON)** `QuestionnaireData` – required: `brand_model`, `initial_capacity_ah`, `current_capacity_ah`, `years_owned`, `primary_application` (E-bike, E-car), `avg_daily_usage` (Light, Medium, Heavy), `charging_frequency_per_week`, `typical_charge_level` (20-80, 0-100, Always Full). Optional: `avg_temperature_c` (-30 to 100).
   - **Responses**:
-    - `400`: `{ "error": "listing_id is required" }`
+    - `400`: `{ "error": "Missing required fields", "required": [...] }` or `{ "error": "listing_id is required" }`
     - `404`: `{ "error": "Listing not found" }`
-    - `201`: `{ "data": UsageSurvey }`
-  - **Sample** (use `listing_id` from `GET /api/listings`; body matches sample.sql usage_surveys):
+    - `201`: `{ "data": UserSurvey }`
+  - **Sample** (use `listing_id` from `GET /api/listings`):
     ```bash
     curl -X POST http://localhost:3000/api/questionnaire/<listing_id> \
       -H "Content-Type: application/json" \
       -d '{
-        "years_used": 2,
-        "first_owner": true,
-        "use_case": "Electric Scooter",
-        "charging_frequency": "Daily"
+        "brand_model": "Exide BAT-1001",
+        "initial_capacity_ah": 100,
+        "current_capacity_ah": 82.5,
+        "years_owned": 2,
+        "primary_application": "E-bike",
+        "avg_daily_usage": "Medium",
+        "charging_frequency_per_week": 7,
+        "typical_charge_level": "20-80"
       }'
     ```
 
 - **GET** `/api/questionnaire/:listing_id`
-  - **Purpose**: Fetch questionnaire for a listing.
+  - **Purpose**: Fetch user survey for a listing.
   - **Path params**:
     - `listing_id` (string, required)
   - **Responses**:
     - `400`: `{ "error": "listing_id is required" }`
     - `404`: `{ "error": "Questionnaire not found" }`
-    - `200`: `{ "data": UsageSurvey }`
+    - `200`: `{ "data": UserSurvey }`
   - **Sample** (use `listing_id` from `GET /api/listings`):
     ```bash
     curl -X GET http://localhost:3000/api/questionnaire/<listing_id>
@@ -448,7 +455,6 @@ curl -X POST http://localhost:3000/api/nft/burn \
   -d '{"tokenId":"<tokenId>"}'
 ```
 
----
 
 ### 7. Environment & Auth Notes
 

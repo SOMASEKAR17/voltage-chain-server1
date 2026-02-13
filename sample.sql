@@ -124,30 +124,39 @@ battery_history_data AS (
 ),
 
 -- ===============================
--- USAGE SURVEYS
+-- USER SURVEYS
 -- ===============================
-usage_surveys_data AS (
-    INSERT INTO public.usage_surveys
-    (listing_id, years_used, first_owner, use_case, charging_frequency)
+user_surveys_data AS (
+    INSERT INTO public.user_surveys
+    (listing_id, brand_model, initial_capacity_ah, current_capacity_ah,
+     years_owned, primary_application, avg_daily_usage, charging_frequency_per_week, typical_charge_level)
 
     SELECT
-        id,
+        l.id,
+        'Exide BAT-1001',
+        100.00,
+        82.50,
         2,
-        true,
-        'Electric Scooter',
-        'Daily'
-    FROM listings_data
+        'E-bike',
+        'Medium',
+        7,
+        '20-80'
+    FROM listings_data l
     WHERE status = 'active'
 
     UNION ALL
 
     SELECT
-        id,
+        l.id,
+        'Tata Green BAT-1003',
+        95.00,
+        69.80,
         3,
-        false,
-        'Solar Backup',
-        'Weekly'
-    FROM listings_data
+        'E-car',
+        'Heavy',
+        3,
+        '0-100'
+    FROM listings_data l
     WHERE status = 'sold'
 
     RETURNING id

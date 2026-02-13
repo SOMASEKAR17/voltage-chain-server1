@@ -134,9 +134,9 @@ export async function recordHistoryEvent(params: {
     brand: string;
     event_type: string;
     voltage?: number;
-    health_score?: number;
-    owner_wallet: string;
-    nft_token_id?: string;
+    soh_percent?: number;
+    notes?: string;
+    ipfs_hash?: string;
 }): Promise<void> {
     const batteryResult = await query<{
         id: string;
@@ -144,12 +144,13 @@ export async function recordHistoryEvent(params: {
     if (batteryResult.rows.length === 0)
         return;
     const battery_id = batteryResult.rows[0].id;
-    await query(`INSERT INTO public.battery_history (battery_id, event_type, voltage, soh_percent, notes)
-     VALUES ($1, $2, $3, $4, $5)`, [
+    await query(`INSERT INTO public.battery_history (battery_id, event_type, voltage, soh_percent, notes, ipfs_hash)
+     VALUES ($1, $2, $3, $4, $5, $6)`, [
         battery_id,
         params.event_type,
         params.voltage ?? null,
-        params.health_score ?? null,
-        params.nft_token_id ?? null,
+        params.soh_percent ?? null,
+        params.notes ?? null,
+        params.ipfs_hash ?? null,
     ]);
 }

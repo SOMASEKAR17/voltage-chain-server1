@@ -1,9 +1,16 @@
+/** Matches public.user_surveys schema. */
 export interface QuestionnaireData {
-    years_used?: number;
-    first_owner?: boolean;
-    use_case?: string;
-    charging_frequency?: string;
+    brand_model: string;
+    initial_capacity_ah: number;
+    current_capacity_ah: number;
+    years_owned: number;
+    primary_application: 'E-bike' | 'E-car';
+    avg_daily_usage: 'Light' | 'Medium' | 'Heavy';
+    charging_frequency_per_week: number;
+    typical_charge_level: '20-80' | '0-100' | 'Always Full';
+    avg_temperature_c?: number;
 }
+
 export interface OCRResult {
     extracted_text?: string;
     confidence_score?: number;

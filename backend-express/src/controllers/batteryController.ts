@@ -97,23 +97,32 @@ export class BatteryController {
                 battery_code,
                 brand,
                 event_type: 'listing',
-                health_score,
-                owner_wallet,
-                nft_token_id,
+                soh_percent: health_score,
+                notes: nft_token_id ? `NFT minted: ${nft_token_id}` : undefined,
             });
             if (questionnaire) {
                 const listingId = await listingService.getListingByBatteryId(battery.id);
                 if (listingId) {
                     try {
+                        const q = questionnaire as Partial<QuestionnaireData>;
+                        const fullQuestionnaire: QuestionnaireData = {
+                            brand_model: q.brand_model ?? `${brand} ${battery_code}`,
+                            initial_capacity_ah: q.initial_capacity_ah ?? initial_capacity,
+                            current_capacity_ah: q.current_capacity_ah ?? current_capacity,
+                            years_owned: q.years_owned ?? 0,
+                            primary_application: q.primary_application ?? 'E-bike',
+                            avg_daily_usage: q.avg_daily_usage ?? 'Medium',
+                            charging_frequency_per_week: q.charging_frequency_per_week ?? 7,
+                            typical_charge_level: q.typical_charge_level ?? '20-80',
+                            avg_temperature_c: q.avg_temperature_c,
+                        };
                         const existing = await questionnaireService.getQuestionnaireByListingId(listingId);
                         if (existing) {
-                            await questionnaireService.updateQuestionnaire(listingId, questionnaire as QuestionnaireData);
+                            await questionnaireService.updateQuestionnaire(listingId, fullQuestionnaire);
+                        } else {
+                            await questionnaireService.createQuestionnaire(listingId, fullQuestionnaire);
                         }
-                        else {
-                            await questionnaireService.createQuestionnaire(listingId, questionnaire as QuestionnaireData);
-                        }
-                    }
-                    catch (err) {
+                    } catch (err) {
                         console.error('Failed to save questionnaire:', err);
                     }
                 }
