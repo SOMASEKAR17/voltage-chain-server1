@@ -117,3 +117,25 @@ export async function getListingById(id: string): Promise<ListingWithImages | nu
         images,
     };
 }
+
+/** Result shape from prediction API health_analysis + rul_prediction for storage */
+export interface PredictionResultForStorage {
+    soh_percentage: number;
+    health_status: string;
+    health_description: string;
+    degradation_factor_percent?: number;
+    rul_cycles?: number;
+    estimated_days_to_eol?: number;
+}
+
+/** Append an AI evaluation record for a listing (e.g. after RUL prediction). */
+export async function upsertAiEvaluation(
+    listingId: string,
+    result: PredictionResultForStorage
+): Promise<void> {
+    await query(
+        `INSERT INTO public.ai_evaluations (listing_id, predicted_soh, explanation, llm_verdict)
+         VALUES ($1, $2, $3, $4)`,
+        [listingId, result.soh_percentage, result.health_description, result.health_status]
+    );
+}

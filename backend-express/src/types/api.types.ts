@@ -1,8 +1,8 @@
 /** Matches public.user_surveys schema. */
 export interface QuestionnaireData {
     brand_model: string;
-    initial_capacity_ah: number;
-    current_capacity_ah: number;
+    initial_capacity: number;
+    current_capacity: number;
     years_owned: number;
     primary_application: 'E-bike' | 'E-car';
     avg_daily_usage: 'Light' | 'Medium' | 'Heavy';
@@ -78,4 +78,37 @@ export interface ListingWithImages {
     status: string;
     ai_verified: boolean;
     images: ListingImage[];
+}
+
+/** Request body for FastAPI Battery Prediction API POST /api/predict-rul */
+export interface PredictRulRequest {
+    current_capacity: number;
+    initial_capacity: number;
+    ambient_temperature?: number;
+    cycle_count: number;
+    age_days: number;
+}
+
+/** Response from FastAPI Battery Prediction API (predict-rul, test-prediction) */
+export interface PredictRulResponse {
+    success: boolean;
+    battery_metrics: {
+        initial_capacity_ahr: number;
+        current_capacity_ahr: number;
+        cycle_count: number;
+        age_days: number;
+        ambient_temperature_c: number;
+    };
+    health_analysis: {
+        soh_percentage: number;
+        health_status: string;
+        health_description: string;
+        degradation_factor_percent: number;
+    };
+    rul_prediction: {
+        rul_cycles: number;
+        estimated_days_to_eol: number;
+        estimated_time_to_eol: string;
+    };
+    recommendations: string[];
 }

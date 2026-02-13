@@ -50,8 +50,10 @@ Use `GET /api/listings` or `GET /api/battery/:id` to get real UUIDs for path par
 | POST | `/api/battery/list` | List battery on marketplace, mint NFT |
 | GET | `/api/listings` | Get all listings |
 | GET | `/api/listings/:id` | Get listing by ID |
+| GET | `/api/listings/:id/predict-rul` | RUL prediction (battery + questionnaire) |
+| GET | `/api/predict/health` | Check Battery Prediction API (FastAPI) health |
 | POST | `/api/ocr/scan-label` | Scan battery label (multipart) |
-| POST | `/api/questionnaire/:listing_id` | Create/update questionnaire |
+| POST | `/api/questionnaire/:listing_id` | Create/update questionnaire (optional `?predict=true`) |
 | GET | `/api/questionnaire/:listing_id` | Get questionnaire |
 | POST | `/api/wallet/create` | Create custodial wallet |
 | POST | `/api/nft/mint` | Mint battery NFT |
@@ -114,7 +116,7 @@ Use `GET /api/listings` or `GET /api/battery/:id` to get real UUIDs for path par
     - `manufacture_year` (number, required)
     - `charging_cycles` (number, optional)
     - `owner_wallet` (string, required)
-    - `questionnaire` (optional partial `QuestionnaireData`): `brand_model`, `initial_capacity_ah`, `current_capacity_ah`, `years_owned`, `primary_application` (E-bike, E-car), `avg_daily_usage` (Light, Medium, Heavy), `charging_frequency_per_week`, `typical_charge_level` (20-80, 0-100, Always Full); optional `avg_temperature_c`. Defaults filled from battery when omitted.
+    - `questionnaire` (optional partial `QuestionnaireData`): `brand_model`, `initial_capacity`, `current_capacity`, `years_owned`, `primary_application` (E-bike, E-car), `avg_daily_usage` (Light, Medium, Heavy), `charging_frequency_per_week`, `typical_charge_level` (20-80, 0-100, Always Full); optional `avg_temperature_c`. Defaults filled from battery when omitted.
   - **Validation**:
     - Missing any of: `battery_code`, `brand`, `initial_capacity`, `current_capacity`, `manufacture_year`, `owner_wallet`
       - → `400` with:
@@ -265,19 +267,20 @@ Use `GET /api/listings` or `GET /api/battery/:id` to get real UUIDs for path par
   - **Purpose**: Create or update a user survey (battery usage questionnaire) for a listing.
   - **Path params**:
     - `listing_id` (string, required): listing UUID.
-  - **Body (JSON)** `QuestionnaireData` – required: `brand_model`, `initial_capacity_ah`, `current_capacity_ah`, `years_owned`, `primary_application` (E-bike, E-car), `avg_daily_usage` (Light, Medium, Heavy), `charging_frequency_per_week`, `typical_charge_level` (20-80, 0-100, Always Full). Optional: `avg_temperature_c` (-30 to 100).
+  - **Query**: `predict=true` (optional) – after saving, run RUL prediction (FastAPI) and return `prediction` in the response; also stores result in `ai_evaluations`.
+  - **Body (JSON)** `QuestionnaireData` – required: `brand_model`, `initial_capacity`, `current_capacity`, `years_owned`, `primary_application` (E-bike, E-car), `avg_daily_usage` (Light, Medium, Heavy), `charging_frequency_per_week`, `typical_charge_level` (20-80, 0-100, Always Full). Optional: `avg_temperature_c` (-30 to 100).
   - **Responses**:
     - `400`: `{ "error": "Missing required fields", "required": [...] }` or `{ "error": "listing_id is required" }`
     - `404`: `{ "error": "Listing not found" }`
-    - `201`: `{ "data": UserSurvey }`
+    - `201`: `{ "data": UserSurvey }` or with `?predict=true`: `{ "data": UserSurvey, "prediction": PredictRulResponse }` (or `"prediction": { "error": "..." }` if FastAPI is down).
   - **Sample** (use `listing_id` from `GET /api/listings`):
     ```bash
     curl -X POST http://localhost:3000/api/questionnaire/<listing_id> \
       -H "Content-Type: application/json" \
       -d '{
         "brand_model": "Exide BAT-1001",
-        "initial_capacity_ah": 100,
-        "current_capacity_ah": 82.5,
+        "initial_capacity": 100,
+        "current_capacity": 82.5,
         "years_owned": 2,
         "primary_application": "E-bike",
         "avg_daily_usage": "Medium",
@@ -298,6 +301,57 @@ Use `GET /api/listings` or `GET /api/battery/:id` to get real UUIDs for path par
     ```bash
     curl -X GET http://localhost:3000/api/questionnaire/<listing_id>
     ```
+
+---
+
+### 4a. Battery Prediction workflow (Questionnaire → RUL)
+
+The **Voltage Chain Battery Prediction API** (FastAPI, default `http://localhost:8000`) is used to predict Remaining Useful Life (RUL) and health from questionnaire + battery data. The Express backend proxies and maps data as follows.
+
+**Recommended flow**
+
+1. User completes **questionnaire** for a listing: `POST /api/questionnaire/:listing_id` with full `QuestionnaireData`.
+2. Either:
+   - **One-shot**: Add `?predict=true` to the same request → response includes `data` (survey) and `prediction` (RUL, SoH, recommendations). Result is also stored in `ai_evaluations`.
+   - **Two-step**: Then call `GET /api/listings/:id/predict-rul` to get the same prediction (requires questionnaire and battery for that listing).
+
+**Field mapping (questionnaire + battery → FastAPI `/api/predict-rul`)**
+
+| FastAPI param           | Source |
+|------------------------|--------|
+| `initial_capacity`     | Questionnaire `initial_capacity` or battery `initial_capacity` |
+| `current_capacity`     | Questionnaire `current_capacity` or battery `current_capacity` |
+| `cycle_count`          | Battery `charging_cycles`, or estimated from `years_owned × charging_frequency_per_week × 52` |
+| `age_days`             | Questionnaire `years_owned × 365` |
+| `ambient_temperature`  | Questionnaire `avg_temperature_c` or default `25` |
+
+**Endpoints**
+
+- **GET** `/api/listings/:id/predict-rul`
+  - **Purpose**: Run RUL prediction for a listing using its battery and questionnaire. Call after the user has submitted the questionnaire.
+  - **Path params**: `id` – listing UUID.
+  - **Responses**:
+    - `200`: Full FastAPI-style response: `success`, `battery_metrics`, `health_analysis` (soh_percentage, health_status, health_description), `rul_prediction` (rul_cycles, estimated_days_to_eol, estimated_time_to_eol), `recommendations`.
+    - `400`: Listing has no battery, or questionnaire missing, or prediction API error.
+    - `404`: Listing or battery not found.
+  - **Sample** (ensure FastAPI is running on port 8000 and listing has questionnaire):
+    ```bash
+    curl -X GET "http://localhost:3000/api/listings/<listing_id>/predict-rul"
+    ```
+
+- **GET** `/api/predict/health`
+  - **Purpose**: Check if the Battery Prediction API (FastAPI) is reachable.
+  - **Responses**:
+    - `200`: `{ "status": "ok", "message": "..." }` from FastAPI.
+    - `503`: `{ "status": "unavailable", "message": "Battery Prediction API is not reachable" }`.
+  - **Sample**:
+    ```bash
+    curl -X GET "http://localhost:3000/api/predict/health"
+    ```
+
+**Environment**
+
+- Set `PREDICTION_API_URL` (default `http://localhost:8000`) if the FastAPI service runs elsewhere.
 
 ---
 

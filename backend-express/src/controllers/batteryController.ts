@@ -107,8 +107,8 @@ export class BatteryController {
                         const q = questionnaire as Partial<QuestionnaireData>;
                         const fullQuestionnaire: QuestionnaireData = {
                             brand_model: q.brand_model ?? `${brand} ${battery_code}`,
-                            initial_capacity_ah: q.initial_capacity_ah ?? initial_capacity,
-                            current_capacity_ah: q.current_capacity_ah ?? current_capacity,
+                            initial_capacity: q.initial_capacity ?? initial_capacity,
+                            current_capacity: q.current_capacity ?? current_capacity,
                             years_owned: q.years_owned ?? 0,
                             primary_application: q.primary_application ?? 'E-bike',
                             avg_daily_usage: q.avg_daily_usage ?? 'Medium',

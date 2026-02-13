@@ -5,6 +5,7 @@ import batteryRoutes from './routes/battery.routes';
 import ocrRoutes from './routes/ocr.routes';
 import listingRoutes from './routes/listing.routes';
 import questionnaireRoutes from './routes/questionnaire.routes';
+import predictRoutes from './routes/predict.routes';
 import walletRoutes from './routes/wallet.routes';
 import nftRoutes from './routes/nft.routes';
 import { errorHandler } from './middleware/errorHandler';
@@ -32,6 +33,7 @@ app.use('/api/battery', batteryRoutes);
 app.use('/api/ocr', ocrRoutes);
 app.use('/api/listings', listingRoutes);
 app.use('/api/questionnaire', questionnaireRoutes);
+app.use('/api/predict', predictRoutes);
 app.use('/api/wallet', walletRoutes);
 app.use('/api/nft', nftRoutes);
 

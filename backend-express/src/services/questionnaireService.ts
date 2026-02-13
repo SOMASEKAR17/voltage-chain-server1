@@ -6,8 +6,8 @@ export interface UserSurvey {
     id: string;
     listing_id: string;
     brand_model: string;
-    initial_capacity_ah: number;
-    current_capacity_ah: number;
+    initial_capacity: number;
+    current_capacity: number;
     years_owned: number;
     primary_application: string;
     avg_daily_usage: string;
@@ -17,11 +17,11 @@ export interface UserSurvey {
     created_at: Date;
 }
 
-const COLS = `id, listing_id, brand_model, initial_capacity_ah, current_capacity_ah,
+const COLS = `id, listing_id, brand_model, initial_capacity, current_capacity,
   years_owned, primary_application, avg_daily_usage, charging_frequency_per_week,
   typical_charge_level, avg_temperature_c, created_at`;
 
-const INS_COLS = `listing_id, brand_model, initial_capacity_ah, current_capacity_ah,
+const INS_COLS = `listing_id, brand_model, initial_capacity, current_capacity,
   years_owned, primary_application, avg_daily_usage, charging_frequency_per_week,
   typical_charge_level, avg_temperature_c`;
 
@@ -30,8 +30,8 @@ function rowToSurvey(row: Record<string, unknown>): UserSurvey {
         id: row.id as string,
         listing_id: row.listing_id as string,
         brand_model: row.brand_model as string,
-        initial_capacity_ah: Number(row.initial_capacity_ah),
-        current_capacity_ah: Number(row.current_capacity_ah),
+        initial_capacity: Number(row.initial_capacity),
+        current_capacity: Number(row.current_capacity),
         years_owned: Number(row.years_owned),
         primary_application: row.primary_application as string,
         avg_daily_usage: row.avg_daily_usage as string,
@@ -46,7 +46,7 @@ export async function createQuestionnaire(listingId: string, q: QuestionnaireDat
     const result = await query(`INSERT INTO public.user_surveys (${INS_COLS})
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
      RETURNING ${COLS}`, [
-        listingId, q.brand_model, q.initial_capacity_ah, q.current_capacity_ah,
+        listingId, q.brand_model, q.initial_capacity, q.current_capacity,
         q.years_owned, q.primary_application, q.avg_daily_usage, q.charging_frequency_per_week,
         q.typical_charge_level, q.avg_temperature_c ?? null,
     ]);
@@ -62,8 +62,8 @@ export async function getQuestionnaireByListingId(listingId: string): Promise<Us
 export async function updateQuestionnaire(listingId: string, q: QuestionnaireData): Promise<UserSurvey | null> {
     const result = await query(`UPDATE public.user_surveys SET
      brand_model = COALESCE($2, brand_model),
-     initial_capacity_ah = COALESCE($3, initial_capacity_ah),
-     current_capacity_ah = COALESCE($4, current_capacity_ah),
+     initial_capacity = COALESCE($3, initial_capacity),
+     current_capacity = COALESCE($4, current_capacity),
      years_owned = COALESCE($5, years_owned),
      primary_application = COALESCE($6, primary_application),
      avg_daily_usage = COALESCE($7, avg_daily_usage),
@@ -71,7 +71,7 @@ export async function updateQuestionnaire(listingId: string, q: QuestionnaireDat
      typical_charge_level = COALESCE($9, typical_charge_level),
      avg_temperature_c = COALESCE($10, avg_temperature_c)
      WHERE listing_id = $1 RETURNING ${COLS}`, [
-        listingId, q.brand_model ?? null, q.initial_capacity_ah ?? null, q.current_capacity_ah ?? null,
+        listingId, q.brand_model ?? null, q.initial_capacity ?? null, q.current_capacity ?? null,
         q.years_owned ?? null, q.primary_application ?? null, q.avg_daily_usage ?? null,
         q.charging_frequency_per_week ?? null, q.typical_charge_level ?? null,
         q.avg_temperature_c ?? null,

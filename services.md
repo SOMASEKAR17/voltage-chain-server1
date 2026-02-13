@@ -54,7 +54,7 @@ Exports:
 - `updateQuestionnaire(listingId: string, questionnaire: QuestionnaireData): Promise<UserSurvey | null>` — updates existing survey.
 
 Notes:
-- Uses `user_surveys` table (schema-aligned). Required: `brand_model`, `initial_capacity_ah`, `current_capacity_ah`, `years_owned`, `primary_application` (E-bike | E-car), `avg_daily_usage` (Light | Medium | Heavy), `charging_frequency_per_week`, `typical_charge_level` (20-80 | 0-100 | Always Full). Optional: `avg_temperature_c`.
+- Uses `user_surveys` table (schema-aligned). Required: `brand_model`, `initial_capacity`, `current_capacity`, `years_owned`, `primary_application` (E-bike | E-car), `avg_daily_usage` (Light | Medium | Heavy), `charging_frequency_per_week`, `typical_charge_level` (20-80 | 0-100 | Always Full). Optional: `avg_temperature_c`.
 
 ## ocrService
 Location: `backend-express/src/services/ocrService.ts`

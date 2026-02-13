@@ -128,7 +128,7 @@ battery_history_data AS (
 -- ===============================
 user_surveys_data AS (
     INSERT INTO public.user_surveys
-    (listing_id, brand_model, initial_capacity_ah, current_capacity_ah,
+    (listing_id, brand_model, initial_capacity, current_capacity,
      years_owned, primary_application, avg_daily_usage, charging_frequency_per_week, typical_charge_level)
 
     SELECT

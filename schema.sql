@@ -89,11 +89,11 @@ CREATE TABLE public.user_surveys (
 
     brand_model text NOT NULL,
 
-    initial_capacity_ah numeric(8,2) NOT NULL
-        CHECK (initial_capacity_ah > 0),
+    initial_capacity numeric(8,2) NOT NULL
+        CHECK (initial_capacity > 0),
 
-    current_capacity_ah numeric(8,2) NOT NULL
-        CHECK (current_capacity_ah > 0),
+    current_capacity numeric(8,2) NOT NULL
+        CHECK (current_capacity > 0),
 
     years_owned int NOT NULL
         CHECK (years_owned >= 0),
