@@ -10,18 +10,45 @@ const ABI = [
   "function ownerOf(uint256 tokenId) public view returns (address)"
 ];
 
-const provider = new ethers.JsonRpcProvider(process.env.RPC_URL);
+let contract: ethers.Contract | null = null;
 
-const wallet = new ethers.Wallet(
-  process.env.MINTER_PRIVATE_KEY!,
-  provider
-);
 
-const contract = new ethers.Contract(
-  process.env.CONTRACT_ADDRESS!,
-  ABI,
-  wallet
-);
+function getContract(): ethers.Contract {
+  if (contract) return contract;
+
+  const rpcUrl = process.env.RPC_URL;
+  if (!rpcUrl) throw new Error("RPC_URL not found in environment variables");
+  
+  const provider = new ethers.JsonRpcProvider(rpcUrl);
+
+  let privateKey = process.env.PRIVATE_KEY || process.env.MINTER_PRIVATE_KEY;
+
+  if (!privateKey) {
+    throw new Error("Private key not found in environment variables");
+  }
+
+  // Sanitize private key
+  privateKey = privateKey.trim();
+  if (!privateKey.startsWith('0x')) {
+    privateKey = `0x${privateKey}`;
+  }
+
+  const wallet = new ethers.Wallet(
+    privateKey,
+    provider
+  );
+
+  const contractAddress = process.env.CONTRACT_ADDRESS;
+  if (!contractAddress) throw new Error("CONTRACT_ADDRESS not found in environment variables");
+
+  contract = new ethers.Contract(
+    contractAddress,
+    ABI,
+    wallet
+  );
+
+  return contract;
+}
 
 export async function mintBatteryNFT(
   batteryId: string,
@@ -29,6 +56,7 @@ export async function mintBatteryNFT(
   cid: string,
   to: string
 ) {
+  const contract = getContract();
   const tokenURI = `ipfs://${cid}`;
 
   const tx = await contract.mintBatteryNFT(
@@ -54,6 +82,7 @@ export async function updateBatteryHealth(
   tokenId: string,
   newHealth: number
 ) {
+  const contract = getContract();
   const tx = await contract.updateBatteryHealth(
     tokenId,
     Math.floor(newHealth)
@@ -70,6 +99,7 @@ export async function updateBatteryMetadata(
   tokenId: string,
   cid: string
 ) {
+  const contract = getContract();
   const tx = await contract.updateBatteryMetadata(
     tokenId,
     cid
@@ -85,6 +115,7 @@ export async function transferBatteryNFT(
   from: string,
   to: string
 ) {
+  const contract = getContract();
   const tx = await contract.safeTransferFrom(
     from,
     to,
@@ -99,6 +130,7 @@ export async function transferBatteryNFT(
 export async function burnBatteryNFT(
   tokenId: string
 ) {
+  const contract = getContract();
   const tx = await contract.burn(
     tokenId
   );
@@ -111,6 +143,7 @@ export async function burnBatteryNFT(
 export async function getBatteryOnChain(
   tokenId: string
 ) {
+  const contract = getContract();
   const uri = await contract.tokenURI(tokenId);
   const owner = await contract.ownerOf(tokenId);
 
@@ -120,3 +153,4 @@ export async function getBatteryOnChain(
     owner
   };
 }
+
