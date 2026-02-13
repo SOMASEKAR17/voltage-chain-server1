@@ -108,6 +108,15 @@ curl -X POST http://localhost:3000/api/ocr/scan-label \
 
 ---
 
+## Services
+
+Detailed documentation for backend services (battery, OCR, NFT, FastAPI adapter) is available in the repository docs:
+
+- Services docs: [docs/services.md](docs/services.md)
+
+Refer to `backend-express/src/services` for implementation details.
+
+
 ## Project structure
 
 ```
