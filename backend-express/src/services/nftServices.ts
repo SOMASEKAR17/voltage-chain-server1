@@ -64,3 +64,15 @@ export const burnBatteryNFT = async (
   return tx.hash;
 };
 
+export const getBatteryOnChain = async (
+  tokenId: string
+) => {
+  const owner = await contract.ownerOf(tokenId);
+  const cid = await contract.tokenURI(tokenId);
+
+  return {
+    tokenId,
+    owner,
+    cid,
+  };
+};
