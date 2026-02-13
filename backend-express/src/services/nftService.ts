@@ -8,7 +8,8 @@ const ABI = [
   "function burnBatteryNFT(uint256 tokenId)",
   "function tokenURI(uint256 tokenId) view returns (string)",
   "function ownerOf(uint256 tokenId) view returns (address)",
-  "event Transfer(address indexed from, address indexed to, uint256 indexed tokenId)"
+  "function nextTokenId() view returns (uint256)",
+  "function safeTransferFrom(address from, address to, uint256 tokenId)"
 ];
 
 let contract: ethers.Contract | null = null;
@@ -134,6 +135,22 @@ export async function transferBatteryNFT(
   to: string
 ) {
   const contract = getContract();
+
+  // 1. Verify ownership
+  const currentOwner = await contract.ownerOf(tokenId);
+  if (currentOwner.toLowerCase() !== from.toLowerCase()) {
+    throw new Error(`Transfer failed: Address ${from} is not the owner of token ${tokenId}. Current owner is ${currentOwner}.`);
+  }
+
+  // 2. Verify that the wallet executing the transaction (msg.sender) is either the owner 
+  //    or has been approved to transfer this token.
+  //    In this setup, the server wallet is the signer.
+  //    So, we need to check if serverWallet == currentOwner OR serverWallet is approved.
+  
+  // We can skip explicit approval check here if we assume the server wallet IS the owner, 
+  // but if we are building a marketplace, the server might be an operator.
+  // For now, let's just proceed with the transfer if the 'from' check passes.
+
   const tx = await contract.safeTransferFrom(
     from,
     to,
