@@ -1,0 +1,102 @@
+# Dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env*.local
+
+# Build outputs
+dist/
+build/
+*.tsbuildinfo
+*.js.map
+*.d.ts.map
+
+# TypeScript
+*.tsbuildinfo
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# OS files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+*~
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*.swn
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+processed_*.png
+ocr_*.jpg
+ocr_*.png
+ocr_*.jpeg
+
+# Docker
+docker-compose.override.yml
+.dockerignore
+
+# Database
+*.sqlite
+*.sqlite3
+*.db
+
+# Coverage reports
+coverage/
+*.lcov
+.nyc_output/
+
+# Testing
+.jest/
+
+# Misc
+.cache/
+.parcel-cache/
+.next/
+.nuxt/
+.vuepress/dist/
+.serverless/
+.fusebox/
+.dynamodb/
+.tern-port
+
+# Cloudinary (if storing credentials locally)
+cloudinary.json
+
+# Uploads (if storing locally)
+uploads/
+public/uploads/
+
+.env
+
