@@ -166,9 +166,8 @@ export async function burnBatteryNFT(
   tokenId: string
 ) {
   const contract = getContract();
-  const tx = await contract.burn(
-    tokenId
-  );
+
+  const tx = await contract.burnBatteryNFT(tokenId);
 
   const receipt = await tx.wait();
 
