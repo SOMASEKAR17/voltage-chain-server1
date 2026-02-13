@@ -29,7 +29,7 @@ CREATE TABLE public.users (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
 
     email text NOT NULL UNIQUE,
-    password_hash text NOT NULL,
+    
 
     wallet_address text UNIQUE,
     name text,
@@ -147,6 +147,26 @@ CREATE TABLE public.listing_images (
         CHECK (image_type IN ('gallery', 'label')),
 
     position int DEFAULT 0,
+
+    created_at timestamp DEFAULT CURRENT_TIMESTAMP
+);
+
+
+CREATE TABLE public.user_wallets (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+
+    user_id uuid NOT NULL
+        REFERENCES public.users(id)
+        ON DELETE CASCADE,
+
+    wallet_address text NOT NULL UNIQUE,
+
+    encrypted_private_key text,
+
+    wallet_type text NOT NULL
+        CHECK (wallet_type IN ('custodial', 'external')),
+
+    is_primary boolean DEFAULT true,
 
     created_at timestamp DEFAULT CURRENT_TIMESTAMP
 );
