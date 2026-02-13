@@ -1,11 +1,5 @@
-import { ethers } from 'ethers';
-import dotenv from 'dotenv';
+import { ethers } from "ethers";
 
-dotenv.config();
-
-const RPC_URL = process.env.RPC_URL!;
-const PRIVATE_KEY = process.env.PRIVATE_KEY!;
-const CONTRACT_ADDRESS = process.env.CONTRACT_ADDRESS!;
 
 const ABI = [
   "function mintBatteryNFT(address to, string memory cid) public returns (uint256)",
@@ -16,63 +10,113 @@ const ABI = [
   "function ownerOf(uint256 tokenId) public view returns (address)"
 ];
 
-const provider = new ethers.JsonRpcProvider(RPC_URL);
-const wallet = new ethers.Wallet(PRIVATE_KEY, provider);
-const contract = new ethers.Contract(CONTRACT_ADDRESS, ABI, wallet);
+const provider = new ethers.JsonRpcProvider(process.env.RPC_URL);
 
-export const mintBatteryNFT = async (
-  batteryCode: string,
-  ownerWallet: string,
-  cid: string
-) => {
-  const tx = await contract.mintBatteryNFT(ownerWallet, cid);
+const wallet = new ethers.Wallet(
+  process.env.MINTER_PRIVATE_KEY!,
+  provider
+);
+
+const contract = new ethers.Contract(
+  process.env.CONTRACT_ADDRESS!,
+  ABI,
+  wallet
+);
+
+export async function mintBatteryNFT(
+  batteryId: string,
+  healthScore: number,
+  cid: string,
+  to: string
+) {
+  const tokenURI = `ipfs://${cid}`;
+
+  const tx = await contract.mintBatteryNFT(
+    to,
+    batteryId,
+    Math.floor(healthScore),
+    "active",
+    tokenURI
+  );
+
   const receipt = await tx.wait();
 
-  const event = receipt.logs.find((log: any) => log.fragment?.name === "Transfer");
-  const tokenId = event?.args?.tokenId?.toString();
+  const tokenId = receipt.logs[0].args[2].toString();
 
   return {
     tokenId,
-    txHash: tx.hash,
+    txHash: receipt.hash
   };
-};
+}
 
-export const updateBatteryMetadata = async (
+
+export async function updateBatteryHealth(
+  tokenId: string,
+  newHealth: number
+) {
+  const tx = await contract.updateBatteryHealth(
+    tokenId,
+    Math.floor(newHealth)
+  );
+
+  const receipt = await tx.wait();
+
+  return {
+    txHash: receipt.hash
+  };
+}
+
+export async function updateBatteryMetadata(
   tokenId: string,
   cid: string
-) => {
-  const tx = await contract.updateBatteryMetadata(tokenId, cid);
-  await tx.wait();
-  return tx.hash;
-};
+) {
+  const tx = await contract.updateBatteryMetadata(
+    tokenId,
+    cid
+  );
 
-export const transferBatteryNFT = async (
+  const receipt = await tx.wait();
+
+  return receipt.hash;
+}
+
+export async function transferBatteryNFT(
   tokenId: string,
   from: string,
   to: string
-) => {
-  const tx = await contract.safeTransferFrom(from, to, tokenId);
-  await tx.wait();
-  return tx.hash;
-};
+) {
+  const tx = await contract.safeTransferFrom(
+    from,
+    to,
+    tokenId
+  );
 
-export const burnBatteryNFT = async (
-  tokenId: string
-) => {
-  const tx = await contract.burn(tokenId);
-  await tx.wait();
-  return tx.hash;
-};
+  const receipt = await tx.wait();
 
-export const getBatteryOnChain = async (
+  return receipt.hash;
+}
+
+export async function burnBatteryNFT(
   tokenId: string
-) => {
+) {
+  const tx = await contract.burn(
+    tokenId
+  );
+
+  const receipt = await tx.wait();
+
+  return receipt.hash;
+}
+
+export async function getBatteryOnChain(
+  tokenId: string
+) {
+  const uri = await contract.tokenURI(tokenId);
   const owner = await contract.ownerOf(tokenId);
-  const cid = await contract.tokenURI(tokenId);
 
   return {
     tokenId,
-    owner,
-    cid,
+    tokenURI: uri,
+    owner
   };
-};
+}

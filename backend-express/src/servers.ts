@@ -5,6 +5,7 @@ import batteryRoutes from './routes/battery.routes';
 import ocrRoutes from './routes/ocr.routes';
 import listingRoutes from './routes/listing.routes';
 import questionnaireRoutes from './routes/questionnaire.routes';
+import walletRoutes from './routes/wallet.routes';
 import { errorHandler } from './middleware/errorHandler';
 import logger from './utils/logger';
 const envPath = path.resolve(process.cwd(), '.env');
@@ -26,6 +27,7 @@ app.use('/api/battery', batteryRoutes);
 app.use('/api/ocr', ocrRoutes);
 app.use('/api/listings', listingRoutes);
 app.use('/api/questionnaire', questionnaireRoutes);
+app.use('/api/wallet', walletRoutes);
 app.use(errorHandler);
 const port = Number(process.env.PORT || '3000');
 const server = app.listen(port, () => {

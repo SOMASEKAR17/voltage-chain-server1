@@ -4,6 +4,7 @@ import * as nftService from '../services/nftService';
 import * as questionnaireService from '../services/questionnaireService';
 import * as listingService from '../services/listingService';
 import { validateBatteryPayload } from '../utils/validators';
+import { uploadJSONToIPFS } from '../services/ipfsService';
 import { ListBatteryResponse, QuestionnaireData } from '../types/api.types';
 export class BatteryController {
     static getBattery: RequestHandler = async (req, res, next) => {
@@ -61,7 +62,29 @@ export class BatteryController {
                 owner_wallet,
             });
             if (!nft_exists) {
-                const { tokenId, txHash } = await nftService.mintBatteryNFT(battery_code, health_score);
+                // Create metadata for IPFS
+                const metadata = {
+                    name: `Battery ${battery_code}`,
+                    description: `Battery Passport for ${brand} ${battery_code}`,
+                    image: "https://gateway.pinata.cloud/ipfs/QmPlaceholderImage", // TODO: Upload actual image if available
+                    attributes: [
+                        { trait_type: "Brand", value: brand },
+                        { trait_type: "Model", value: battery_code },
+                        { trait_type: "Initial Capacity", value: initial_capacity },
+                        { trait_type: "Manufacture Year", value: manufacture_year },
+                        { trait_type: "Health Score", value: health_score }
+                    ]
+                };
+
+                // Upload metadata to IPFS
+                let ipfsCid = "QmPlaceholderCid";
+                try {
+                    ipfsCid = await uploadJSONToIPFS(metadata);
+                } catch (error) {
+                    console.error("Failed to upload metadata to IPFS, using placeholder:", error);
+                }
+
+                const { tokenId, txHash } = await nftService.mintBatteryNFT(battery_code, health_score, ipfsCid, owner_wallet);
                 await batteryService.updateBatteryNFT(battery.id, tokenId, txHash);
                 nft_token_id = tokenId;
             }

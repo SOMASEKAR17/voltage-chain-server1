@@ -3,7 +3,7 @@ import * as nftService from '../services/nftService';
 
 export const mintBatteryNFT: RequestHandler = async (req, res, next) => {
   try {
-    const { battery_code, owner_wallet, cid } = req.body;
+    const { battery_code, owner_wallet, cid, health_score } = req.body;
 
     if (!battery_code || !owner_wallet || !cid) {
       return res.status(400).json({
@@ -13,8 +13,9 @@ export const mintBatteryNFT: RequestHandler = async (req, res, next) => {
 
     const { tokenId, txHash } = await nftService.mintBatteryNFT(
       battery_code,
-      owner_wallet,
-      cid
+      health_score || 100, // Default to 100 if not provided
+      cid,
+      owner_wallet
     );
 
     res.json({
