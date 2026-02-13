@@ -2,12 +2,13 @@ import { ethers } from "ethers";
 
 
 const ABI = [
-  "function mintBatteryNFT(address to, string memory cid) public returns (uint256)",
-  "function updateBatteryMetadata(uint256 tokenId, string memory cid) public",
-  "function safeTransferFrom(address from, address to, uint256 tokenId) public",
-  "function burn(uint256 tokenId) public",
-  "function tokenURI(uint256 tokenId) public view returns (string)",
-  "function ownerOf(uint256 tokenId) public view returns (address)"
+  "function mintBatteryNFT(address to, string _batteryId, uint256 _healthScore, string _status, string _tokenURI)",
+  "function updateBatteryHealth(uint256 tokenId, uint256 newHealth)",
+  "function updateBatteryStatus(uint256 tokenId, string newStatus)",
+  "function burnBatteryNFT(uint256 tokenId)",
+  "function tokenURI(uint256 tokenId) view returns (string)",
+  "function ownerOf(uint256 tokenId) view returns (address)",
+  "event Transfer(address indexed from, address indexed to, uint256 indexed tokenId)"
 ];
 
 let contract: ethers.Contract | null = null;
@@ -69,7 +70,24 @@ export async function mintBatteryNFT(
 
   const receipt = await tx.wait();
 
-  const tokenId = receipt.logs[0].args[2].toString();
+  let tokenId: string | null = null;
+
+for (const log of receipt.logs) {
+  try {
+    const parsed = contract.interface.parseLog(log);
+    if (parsed?.name === "Transfer") {
+      tokenId = parsed.args.tokenId.toString();
+      break;
+    }
+  } catch {}
+}
+
+if (!tokenId) {
+  console.error("Logs parsing failed. Logs:", JSON.stringify(receipt.logs, (key, value) =>
+    typeof value === 'bigint' ? value.toString() : value // Handle BigInt serialization
+  , 2));
+  throw new Error("Mint succeeded but tokenId not found in logs");
+}
 
   return {
     tokenId,

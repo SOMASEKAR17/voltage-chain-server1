@@ -4,9 +4,9 @@ function getConnectionString(): string {
         return process.env.DATABASE_URL;
     const user = process.env.POSTGRES_USER;
     const password = process.env.POSTGRES_PASSWORD;
-    const host = process.env.POSTGRES_HOST || 'localhost';
-    const port = process.env.POSTGRES_PORT || '5432';
-    const db = process.env.POSTGRES_DB || 'localdb';
+    const host = process.env.POSTGRES_HOST;
+    const port = process.env.POSTGRES_PORT;
+    const db = process.env.POSTGRES_DB;
     if (!user || !password)
         throw new Error('Database not configured: set DATABASE_URL or POSTGRES_USER and POSTGRES_PASSWORD');
     return `postgresql://${user}:${password}@${host}:${port}/${db}`;
