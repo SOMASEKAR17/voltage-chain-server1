@@ -10,8 +10,11 @@ CREATE TABLE public.batteries (
     battery_code text NOT NULL,
     brand text NOT NULL,
 
-    initial_voltage numeric(6,2),
+    initial_capacity numeric(6,2),
+    current_capacity numeric(6,2),
     manufacture_year int,
+    charging_cycles int,
+    
 
     nft_token_id text,
     minted boolean DEFAULT false,

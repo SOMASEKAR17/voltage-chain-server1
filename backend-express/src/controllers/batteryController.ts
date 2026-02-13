@@ -1,7 +1,8 @@
 import { Request, Response, RequestHandler } from 'express';
 import * as batteryService from '../services/batteryService';
-import * as fastApiService from '../services/fastApiService';
 import * as nftService from '../services/nftService';
+import * as questionnaireService from '../services/questionnaireService';
+import * as listingService from '../services/listingService';
 import { validateBatteryPayload } from '../utils/validators';
 import { ListBatteryResponse, QuestionnaireData } from '../types/api.types';
 
@@ -28,161 +29,112 @@ export class BatteryController {
   };
 
   static listBattery: RequestHandler = async (req: Request, res: Response, next) => {
-  try {
-    const {
-      battery_code,
-      brand,
-      initial_voltage,
-      years_used,
-      owner_wallet,
-      user_voltage,
-      description,
-      questionnaire,
-    } = req.body;
-
-    if (!battery_code || !brand || initial_voltage == null || years_used == null || !owner_wallet) {
-      return res.status(400).json({ error: 'Missing required fields' });
-    }
-
-    const fraudCheck = await fastApiService.checkFraud({
-      battery_code,
-      brand,
-      initial_voltage,
-      years_used,
-    });
-
-    if (fraudCheck.is_suspicious && fraudCheck.confidence > 0.8) {
-      return res.status(400).json({
-        error: 'Suspicious activity detected',
-        details: fraudCheck.details,
-      });
-    }
-
-    const history = await batteryService.getBatteryHistory(battery_code, brand);
-    let nft_exists = false;
-    let nft_token_id: string | undefined;
-
-    if (history) {
-      nft_exists = true;
-      nft_token_id = history.nft_token_id;
-    }
-
-    let prediction;
-
-    if (user_voltage !== undefined) {
-      prediction = await fastApiService.predictVoltage({
+    try {
+      const {
         battery_code,
         brand,
-        initial_voltage,
-        years_used,
-      });
-    } else {
-      if (!questionnaire) {
+        initial_capacity,
+        current_capacity,
+        manufacture_year,
+        charging_cycles,
+        owner_wallet,
+        questionnaire,
+      } = req.body;
+
+      if (
+        !battery_code ||
+        !brand ||
+        initial_capacity == null ||
+        current_capacity == null ||
+        manufacture_year == null ||
+        !owner_wallet
+      ) {
         return res.status(400).json({
-          error: 'Please provide either measured voltage or complete the questionnaire',
-          requires: 'questionnaire',
+          error: 'Missing required fields',
+          required: ['battery_code', 'brand', 'initial_capacity', 'current_capacity', 'manufacture_year', 'owner_wallet'],
         });
       }
 
-      prediction = await fastApiService.predictFromQuestionnaire({
+      const history = await batteryService.getBatteryHistory(battery_code, brand);
+      let nft_exists = false;
+      let nft_token_id: string | undefined;
+
+      if (history) {
+        nft_exists = true;
+        nft_token_id = history.nft_token_id;
+      }
+
+      // Calculate health score based on capacity degradation
+      const capacity_degradation = ((initial_capacity - current_capacity) / initial_capacity) * 100;
+      const health_score = Math.max(0, Math.min(100, 100 - capacity_degradation));
+
+      const battery = await batteryService.createBatteryForListing({
         battery_code,
         brand,
-        initial_voltage,
-        years_used,
-        questionnaire: questionnaire as QuestionnaireData,
+        initial_capacity,
+        current_capacity,
+        manufacture_year,
+        charging_cycles,
+        owner_wallet,
       });
-    }
 
-    const final_voltage = user_voltage !== undefined ? user_voltage : prediction.predicted_voltage;
+      if (!nft_exists) {
+        const { tokenId, txHash } = await nftService.mintBatteryNFT(battery_code, health_score);
 
-    if (user_voltage !== undefined) {
-      const error_margin = Math.abs(prediction.predicted_voltage - user_voltage) / prediction.predicted_voltage;
-
-      if (error_margin > 0.15) {
-        if (!description) {
-          return res.status(400).json({
-            error: 'Voltage discrepancy detected',
-            predicted_voltage: prediction.predicted_voltage,
-            user_voltage,
-            error_percentage: (error_margin * 100).toFixed(2),
-            requires: 'description',
-            message: 'Please explain why the voltage differs significantly from prediction',
-          });
-        }
-
-        const validation = await fastApiService.validateDescription({
-          battery_code,
-          brand,
-          initial_voltage,
-          years_used,
-          predicted_voltage: prediction.predicted_voltage,
-          user_voltage,
-          description,
-        });
-
-        if (!validation.is_valid || validation.confidence < 0.7) {
-          return res.status(400).json({
-            error: 'Unable to verify battery condition',
-            message: 'Please re-verify the voltage measurement',
-            validation_confidence: validation.confidence,
-            reason: validation.reason,
-          });
+        await batteryService.updateBatteryNFT(battery.id, tokenId, txHash);
+        nft_token_id = tokenId;
+      } else {
+        if (nft_token_id) {
+          await nftService.updateBatteryHealth(nft_token_id, health_score);
         }
       }
-    }
 
-    const battery = await batteryService.createBatteryForListing({
-      battery_code,
-      brand,
-      initial_voltage,
-      years_used,
-      current_voltage: final_voltage,
-      health_score: prediction.health_score,
-      prediction_data: prediction,
-      is_listed: true,
-      owner_wallet,
-    });
-
-    if (!nft_exists) {
-      const { tokenId, txHash } = await nftService.mintBatteryNFT(battery_code, prediction.health_score);
-
-      await batteryService.updateBatteryNFT(battery.id, tokenId, txHash);
-      nft_token_id = tokenId;
-    } else {
-      if (nft_token_id) {
-        await nftService.updateBatteryHealth(nft_token_id, prediction.health_score);
-      }
-    }
-
-    await batteryService.recordHistoryEvent({
-      battery_code,
-      brand,
-      event_type: 'listing',
-      voltage: final_voltage,
-      health_score: prediction.health_score,
-      owner_wallet,
-      nft_token_id,
-    });
-
-    const response: ListBatteryResponse = {
-      success: true,
-      message: 'Battery listed successfully on marketplace',
-      data: {
-        battery_id: battery.id,
+      await batteryService.recordHistoryEvent({
         battery_code,
-        health_score: prediction.health_score,
-        predicted_voltage: prediction.predicted_voltage,
-        current_voltage: final_voltage,
+        brand,
+        event_type: 'listing',
+        health_score,
+        owner_wallet,
         nft_token_id,
-        is_new_nft: !nft_exists,
-        listing_url: `/marketplace/${battery.id}`,
-      },
-    };
+      });
 
-    res.json(response);
-  } catch (err) {
-    next(err);
-  }
+      // Save questionnaire if provided and listing exists
+      if (questionnaire) {
+        const listingId = await listingService.getListingByBatteryId(battery.id);
+        if (listingId) {
+          try {
+            const existing = await questionnaireService.getQuestionnaireByListingId(listingId);
+            if (existing) {
+              await questionnaireService.updateQuestionnaire(listingId, questionnaire as QuestionnaireData);
+            } else {
+              await questionnaireService.createQuestionnaire(listingId, questionnaire as QuestionnaireData);
+            }
+          } catch (err) {
+            // Log but don't fail the request if questionnaire save fails
+            console.error('Failed to save questionnaire:', err);
+          }
+        }
+      }
+
+      const response: ListBatteryResponse = {
+        success: true,
+        message: 'Battery listed successfully on marketplace',
+        data: {
+          battery_id: battery.id,
+          battery_code,
+          health_score,
+          predicted_voltage: 0, // Deprecated, kept for backward compatibility
+          current_voltage: 0, // Deprecated, kept for backward compatibility
+          nft_token_id,
+          is_new_nft: !nft_exists,
+          listing_url: `/marketplace/${battery.id}`,
+        },
+      };
+
+      res.json(response);
+    } catch (err) {
+      next(err);
+    }
   };
 }
 

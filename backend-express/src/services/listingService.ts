@@ -79,6 +79,29 @@ export async function getListings(): Promise<ListingWithImages[]> {
   });
 }
 
+export async function createListing(params: {
+  battery_id: string;
+  seller_id: string;
+  price: number;
+  health_score?: number;
+}): Promise<string> {
+  const result = await query<{ id: string }>(
+    `INSERT INTO public.listings (battery_id, seller_id, price, health_score, status)
+     VALUES ($1, $2, $3, $4, 'draft')
+     RETURNING id`,
+    [params.battery_id, params.seller_id, params.price, params.health_score ?? null]
+  );
+  return result.rows[0].id;
+}
+
+export async function getListingByBatteryId(batteryId: string): Promise<string | null> {
+  const result = await query<{ id: string }>(
+    `SELECT id FROM public.listings WHERE battery_id = $1 LIMIT 1`,
+    [batteryId]
+  );
+  return result.rows.length > 0 ? result.rows[0].id : null;
+}
+
 export async function getListingById(id: string): Promise<ListingWithImages | null> {
   const listingResult = await query<ListingRow>(
     `SELECT l.id, l.battery_id, l.price, l.predicted_voltage, l.user_voltage,

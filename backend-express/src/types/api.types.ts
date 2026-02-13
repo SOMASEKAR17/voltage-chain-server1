@@ -14,11 +14,11 @@ export interface OCRResult {
 export interface ListBatteryRequest {
   battery_code: string;
   brand: string;
-  initial_voltage: number;
-  years_used: number;
+  initial_capacity: number;
+  current_capacity: number;
+  manufacture_year: number;
+  charging_cycles?: number;
   owner_wallet: string;
-  user_voltage?: number;
-  description?: string;
   questionnaire?: QuestionnaireData;
 }
 
@@ -45,32 +45,12 @@ export interface OCRResponse {
 
 export interface ErrorResponse {
   error: string;
-  requires?: 'voltage' | 'description' | 'questionnaire';
-  predicted_voltage?: number;
-  user_voltage?: number;
-  validation_confidence?: number;
+  required?: string[];
 }
 
 export interface ApiResponse<T> {
   data?: T;
   error?: string;
-}
-
-export interface FraudCheckResult {
-  is_suspicious: boolean;
-  confidence: number;
-  details?: string;
-}
-
-export interface PredictionResult {
-  predicted_voltage: number;
-  health_score: number;
-}
-
-export interface ValidateDescriptionResult {
-  is_valid: boolean;
-  confidence: number;
-  reason?: string;
 }
 
 export interface ListingImage {
