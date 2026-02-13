@@ -8,6 +8,13 @@ export interface OCRResult {
     extracted_text?: string;
     confidence_score?: number;
     image_url: string;
+    battery_code?: string;
+    brand?: string;
+    voltage?: number;
+    capacity?: number;
+    manufacture_year?: number;
+    charging_cycles?: number;
+    ocr_record_id?: string;
 }
 export interface ListBatteryRequest {
     battery_code: string;

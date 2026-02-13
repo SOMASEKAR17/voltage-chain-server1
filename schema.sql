@@ -30,6 +30,7 @@ CREATE TABLE public.users (
 
     email text NOT NULL UNIQUE,
     
+    
 
     wallet_address text UNIQUE,
     name text,

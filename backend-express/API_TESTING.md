@@ -170,16 +170,16 @@ All responses are JSON. Unless noted, errors return an object like:
 ### 3. OCR APIs (`/api/ocr`)
 
 - **POST** `/api/ocr/scan-label`
-  - **Purpose**: Upload a battery label image and extract text using OCR.
+  - **Purpose**: Upload an automotive battery label image; Gemini validates and extracts fields, stores image on Cloudinary, and saves to `ocr_records`.
   - **Content type**: `multipart/form-data`
   - **Form fields**:
-    - `file` (file, required): JPEG/PNG/WEBP image.
+    - `image` (file, required): JPEG/PNG/WEBP image of a battery label.
+    - `user_id` (string, optional): UUID for `ocr_records.user_id`.
+    - `battery_id` (string, optional): UUID for `ocr_records.battery_id`.
   - **Validation**:
-    - No file:
-      - `400`:
-      - `{ "success": false, "message": "No image file provided. Please upload an image file.", "data": null }`
-    - Invalid MIME type:
-      - `400` with message listing allowed types.
+    - No file → `400`: `{ "success": false, "message": "No image file provided. Please upload an image file.", "data": null }`
+    - Non-battery image → `400`: `{ "success": false, "message": "Image is not a valid automotive vehicle battery label...", "data": null }`
+    - Invalid MIME type / file too large (max 10MB) → `400` with error message.
   - **Success** (`200`):
     ```json
     {
@@ -188,14 +188,25 @@ All responses are JSON. Unless noted, errors return an object like:
       "data": {
         "extracted_text": "...",
         "confidence_score": 0.95,
-        "image_url": "https://..."
+        "image_url": "https://res.cloudinary.com/...",
+        "battery_code": "BAT-123",
+        "brand": "Tesla",
+        "voltage": 400,
+        "capacity": 100,
+        "manufacture_year": 2022,
+        "charging_cycles": 150,
+        "ocr_record_id": "<uuid>"
       }
     }
     ```
   - **Sample**:
     ```bash
     curl -X POST http://localhost:3000/api/ocr/scan-label \
-      -F "file=@/path/to/label.jpg"
+      -F "image=@/path/to/battery-label.jpg"
+    curl -X POST http://localhost:3000/api/ocr/scan-label \
+      -F "image=@/path/to/battery-label.jpg" \
+      -F "user_id=<user-uuid>" \
+      -F "battery_id=<battery-uuid>"
     ```
 
 ---
@@ -242,12 +253,36 @@ All responses are JSON. Unless noted, errors return an object like:
 
 ---
 
-### 5. Environment & Auth Notes
+### 5. Wallet APIs (`/api/wallet`)
 
-- **Environment variables** (from `.env` / `.env.example`):
+- **POST** `/api/wallet/create`
+  - **Purpose**: Create a custodial wallet.
+  - **Body**: None.
+  - **Response** (`201`):
+    ```json
+    {
+      "success": true,
+      "message": "Wallet created successfully",
+      "data": {
+        "address": "0x...",
+        "encryptedPrivateKey": "..."
+      }
+    }
+    ```
+  - **Sample**:
+    ```bash
+    curl -X POST http://localhost:3000/api/wallet/create
+    ```
+
+---
+
+### 6. Environment & Auth Notes
+
+- **Environment variables** (from `.env`):
   - `PORT` – server port (default `3000`).
   - `DATABASE_URL` – Postgres connection string.
-  - `CLOUDINARY_*` – for image hosting (used in listings/images/OCR).
+  - `CLOUDINARY_*` – image hosting (listings, OCR label storage).
+  - `GEMINI_API_KEY` or `API_KEY` – Gemini API key for OCR label scanning.
 - **Authentication**:
   - Current endpoints do **not** enforce auth at the Express level (no auth middleware in `servers.ts`).
   - If you add auth later, update this document accordingly.

@@ -8,10 +8,10 @@ import questionnaireRoutes from './routes/questionnaire.routes';
 import walletRoutes from './routes/wallet.routes';
 import { errorHandler } from './middleware/errorHandler';
 import logger from './utils/logger';
-const envPath = path.resolve(process.cwd(), '.env');
-dotenv.config({ path: envPath });
-if (!process.env.DATABASE_URL && process.cwd().endsWith('backend-express')) {
-    dotenv.config({ path: path.resolve(process.cwd(), '..', '.env') });
+const cwd = process.cwd();
+dotenv.config({ path: path.resolve(cwd, '.env') });
+if (cwd.endsWith('backend-express')) {
+    dotenv.config({ path: path.resolve(cwd, '..', '.env') });
 }
 const app = express();
 app.use(express.json());

@@ -20,6 +20,7 @@
   },
   "homepage": "https://github.com/SOMASEKAR17/voltage-chain-server1#readme",
   "dependencies": {
+    "@google/genai": "^1.41.0",
     "@types/multer": "^2.0.0",
     "cloudinary": "^2.9.0",
     "crypto": "^1.0.1",
