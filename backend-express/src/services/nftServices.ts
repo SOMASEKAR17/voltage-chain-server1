@@ -37,3 +37,11 @@ export const mintBatteryNFT = async (
   };
 };
 
+export const updateBatteryMetadata = async (
+  tokenId: string,
+  cid: string
+) => {
+  const tx = await contract.updateBatteryMetadata(tokenId, cid);
+  await tx.wait();
+  return tx.hash;
+};
