@@ -1,3 +1,7 @@
+## Frontend - https://github.com/SOMASEKAR17/voltage-chain-frontend
+## Server1 - https://github.com/SOMASEKAR17/voltage-chain-server1
+## Server2 - https://github.com/SOMASEKAR17/voltage-chain-server2
+
 # HackProject
 
 Hackathon prototype: Express backend for battery lifecycle tracking, OCR label scanning, and optional NFT/marketplace integration.
