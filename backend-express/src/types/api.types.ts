@@ -112,3 +112,38 @@ export interface PredictRulResponse {
     };
     recommendations: string[];
 }
+
+/** Request for FastAPI POST /api/predict-capacity-survey (survey-based capacity prediction) */
+export interface PredictCapacitySurveyRequest {
+    listing_id: string;
+    brand_model: string;
+    initial_capacity: number;
+    years_owned: number;
+    primary_application: 'E-bike' | 'E-car';
+    avg_daily_usage: 'Light' | 'Medium' | 'Heavy';
+    charging_frequency_in_week: number;
+    typical_charge_level: '20-80' | '0-100' | 'Always Full';
+    avg_temperature?: number;
+}
+
+/** Response from FastAPI POST /api/predict-capacity-survey */
+export interface CapacityPredictionResponse {
+    success: boolean;
+    predicted_current_capacity: number;
+    confidence: number;
+    explanation: string;
+    input_summary: {
+        brand_model: string;
+        initial_capacity_ahr: number;
+        years_owned: number;
+        primary_application: string;
+        avg_daily_usage: string;
+        charging_frequency_per_week: number;
+        typical_charge_level: string;
+        avg_temperature_c: number;
+        method?: string;
+        soh_percentage?: number;
+        total_degradation_percent?: number;
+        api_key_used?: string;
+    };
+}

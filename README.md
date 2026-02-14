@@ -40,7 +40,8 @@ Optional:
 | Variable | Description |
 |----------|-------------|
 | `PORT` | Server port (default: 3000) |
-| `FASTAPI_URL` | Base URL of the FastAPI ML service (fraud check, voltage prediction) |
+| `PREDICTION_API_URL` | Battery Prediction API base URL (default: `http://localhost:8000`). With Docker: `http://fastapi:8000`. |
+| `FASTAPI_URL` | Legacy: FastAPI ML service URL (if still used) |
 | `ALCHEMY_API_KEY` | For blockchain/NFT (if used) |
 | `CLOUDINARY_*` | For image storage (if used) |
 
@@ -121,24 +122,23 @@ Detailed documentation for backend services (battery, OCR, NFT, FastAPI adapter)
 Refer to `backend-express/src/services` for implementation details.
 
 
+## Battery Prediction API (FastAPI)
+
+The **Voltage Chain Battery Prediction API** (RUL, health status, survey-based capacity) lives in `fastapi/voltage-chain-server2/`. Express proxies it; see `backend-express/API_TESTING.md` § 4a.
+
+- **Run locally:** `cd fastapi/voltage-chain-server2 && python run.py` (port 8000).
+- **Run with Docker:** `docker compose up -d` — the `fastapi` service is defined in `docker-compose.yml`. Set `PREDICTION_API_URL=http://fastapi:8000` for the Express app when both run in Compose.
+- **Docs:** `fastapi/voltage-chain-server2/API_ENDPOINTS_REFERENCE.md`, `SURVEY_ENDPOINT_DOCUMENTATION.md`, `readme.md`.
+
 ## Project structure
 
 ```
 HackProject/
-├── backend-express/
-│   ├── src/
-│   │   ├── config/       # DB, Alchemy
-│   │   ├── controllers/
-│   │   ├── middleware/
-│   │   ├── routes/
-│   │   ├── services/
-│   │   ├── types/
-│   │   ├── utils/
-│   │   └── server.ts
-│   ├── .env.example
-│   └── tsconfig.json
+├── backend-express/       # Express API (listings, questionnaire, OCR, NFT, prediction proxy)
+├── fastapi/
+│   └── voltage-chain-server2/   # Battery Prediction API (RUL, survey capacity)
 ├── schema.sql            # Postgres schema
-├── docker-compose.yml     # Postgres 16
+├── docker-compose.yml    # Postgres + FastAPI
 ├── .env                  # Your env (not committed)
 └── package.json
 ```

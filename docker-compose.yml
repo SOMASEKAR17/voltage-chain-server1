@@ -15,6 +15,16 @@ services:
       timeout: 5s
       retries: 5
 
+  # Voltage Chain Battery Prediction API (FastAPI) - see fastapi/voltage-chain-server2/
+  fastapi:
+    build:
+      context: ./fastapi/voltage-chain-server2
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    env_file:
+      - ./fastapi/voltage-chain-server2/.env
+    # Optional: GEMINI_API_KEY_1..5 for /api/predict-capacity-survey
 
 volumes:
   pgdata:

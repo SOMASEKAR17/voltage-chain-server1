@@ -50,8 +50,11 @@ Use `GET /api/listings` or `GET /api/battery/:id` to get real UUIDs for path par
 | POST | `/api/battery/list` | List battery on marketplace, mint NFT |
 | GET | `/api/listings` | Get all listings |
 | GET | `/api/listings/:id` | Get listing by ID |
-| GET | `/api/listings/:id/predict-rul` | RUL prediction (battery + questionnaire) |
+| GET | `/api/listings/:id/predict-rul` | RUL prediction (battery + questionnaire; measured data) |
+| GET | `/api/listings/:id/predict-capacity-survey` | Survey-only capacity prediction (no measurements) |
+| GET | `/api/listings/:id/predict-full` | Combined: survey capacity → then RUL (full analysis) |
 | GET | `/api/predict/health` | Check Battery Prediction API (FastAPI) health |
+| GET | `/api/predict/health-status/:soh` | Health category for SoH % (0–100) |
 | POST | `/api/ocr/scan-label` | Scan battery label (multipart) |
 | POST | `/api/questionnaire/:listing_id` | Create/update questionnaire (optional `?predict=true`) |
 | GET | `/api/questionnaire/:listing_id` | Get questionnaire |
@@ -304,54 +307,60 @@ Use `GET /api/listings` or `GET /api/battery/:id` to get real UUIDs for path par
 
 ---
 
-### 4a. Battery Prediction workflow (Questionnaire → RUL)
+### 4a. Battery Prediction (FastAPI integration)
 
-The **Voltage Chain Battery Prediction API** (FastAPI, default `http://localhost:8000`) is used to predict Remaining Useful Life (RUL) and health from questionnaire + battery data. The Express backend proxies and maps data as follows.
+The **Voltage Chain Battery Prediction API** (FastAPI, see `fastapi/voltage-chain-server2/`) runs at `http://localhost:8000` by default. Express proxies and maps questionnaire + battery data. Reference: `fastapi/voltage-chain-server2/API_ENDPOINTS_REFERENCE.md`, `SURVEY_ENDPOINT_DOCUMENTATION.md`.
+
+**Which endpoint to use**
+
+| Scenario | Endpoint | Description |
+|----------|----------|--------------|
+| You have **measured** capacity + battery (e.g. questionnaire has current_capacity) | `GET /api/listings/:id/predict-rul` | RUL from real metrics; requires battery + questionnaire. |
+| You have **only survey** (no current capacity) | `GET /api/listings/:id/predict-capacity-survey` | Predicts current capacity from survey (heuristic/Gemini); no battery required. |
+| **Full analysis** from survey only | `GET /api/listings/:id/predict-full` | 1) Predict capacity from survey, 2) Run RUL with that capacity; returns both `survey` and `rul`. |
 
 **Recommended flow**
 
-1. User completes **questionnaire** for a listing: `POST /api/questionnaire/:listing_id` with full `QuestionnaireData`.
-2. Either:
-   - **One-shot**: Add `?predict=true` to the same request → response includes `data` (survey) and `prediction` (RUL, SoH, recommendations). Result is also stored in `ai_evaluations`.
-   - **Two-step**: Then call `GET /api/listings/:id/predict-rul` to get the same prediction (requires questionnaire and battery for that listing).
+1. User completes **questionnaire**: `POST /api/questionnaire/:listing_id` (optionally `?predict=true` to run RUL and store in `ai_evaluations`).
+2. Then call one of:
+   - **Measured path**: `GET /api/listings/:id/predict-rul` (needs listing with battery + questionnaire).
+   - **Survey-only path**: `GET /api/listings/:id/predict-capacity-survey` (questionnaire only).
+   - **Combined path**: `GET /api/listings/:id/predict-full` (survey → predicted capacity → RUL in one response).
 
-**Field mapping (questionnaire + battery → FastAPI `/api/predict-rul`)**
+**Field mapping (questionnaire → FastAPI)**
 
-| FastAPI param           | Source |
-|------------------------|--------|
-| `initial_capacity`     | Questionnaire `initial_capacity` or battery `initial_capacity` |
-| `current_capacity`     | Questionnaire `current_capacity` or battery `current_capacity` |
-| `cycle_count`          | Battery `charging_cycles`, or estimated from `years_owned × charging_frequency_per_week × 52` |
-| `age_days`             | Questionnaire `years_owned × 365` |
-| `ambient_temperature`  | Questionnaire `avg_temperature_c` or default `25` |
+- **predict-rul**: `initial_capacity`, `current_capacity` (from questionnaire or battery), `cycle_count` (battery or estimated), `age_days` = years_owned × 365, `ambient_temperature` = avg_temperature_c or 25.
+- **predict-capacity-survey**: `listing_id`, `brand_model`, `initial_capacity`, `years_owned`, `primary_application`, `avg_daily_usage`, `charging_frequency_in_week` (= our `charging_frequency_per_week`), `typical_charge_level`, `avg_temperature` (= our `avg_temperature_c` or 25).
 
 **Endpoints**
 
-- **GET** `/api/listings/:id/predict-rul`
-  - **Purpose**: Run RUL prediction for a listing using its battery and questionnaire. Call after the user has submitted the questionnaire.
-  - **Path params**: `id` – listing UUID.
-  - **Responses**:
-    - `200`: Full FastAPI-style response: `success`, `battery_metrics`, `health_analysis` (soh_percentage, health_status, health_description), `rul_prediction` (rul_cycles, estimated_days_to_eol, estimated_time_to_eol), `recommendations`.
-    - `400`: Listing has no battery, or questionnaire missing, or prediction API error.
-    - `404`: Listing or battery not found.
-  - **Sample** (ensure FastAPI is running on port 8000 and listing has questionnaire):
-    ```bash
-    curl -X GET "http://localhost:3000/api/listings/<listing_id>/predict-rul"
-    ```
+- **GET** `/api/listings/:id/predict-rul`  
+  RUL prediction using battery + questionnaire (measured data).  
+  Responses: `200` (full prediction), `400`/`404` (missing data or API error).  
+  Sample: `curl -X GET "http://localhost:3000/api/listings/<listing_id>/predict-rul"`
 
-- **GET** `/api/predict/health`
-  - **Purpose**: Check if the Battery Prediction API (FastAPI) is reachable.
-  - **Responses**:
-    - `200`: `{ "status": "ok", "message": "..." }` from FastAPI.
-    - `503`: `{ "status": "unavailable", "message": "Battery Prediction API is not reachable" }`.
-  - **Sample**:
-    ```bash
-    curl -X GET "http://localhost:3000/api/predict/health"
-    ```
+- **GET** `/api/listings/:id/predict-capacity-survey`  
+  Survey-based capacity prediction only (no measured current capacity).  
+  Responses: `200` (`predicted_current_capacity`, `confidence`, `explanation`, `input_summary`), `400` (e.g. questionnaire missing).  
+  Sample: `curl -X GET "http://localhost:3000/api/listings/<listing_id>/predict-capacity-survey"`
+
+- **GET** `/api/listings/:id/predict-full`  
+  Combined: predict capacity from survey, then RUL with that capacity.  
+  Response: `200` with `{ "survey": CapacityPredictionResponse, "rul": PredictRulResponse }`.  
+  Sample: `curl -X GET "http://localhost:3000/api/listings/<listing_id>/predict-full"`
+
+- **GET** `/api/predict/health`  
+  Check if FastAPI is reachable.  
+  Responses: `200` (status/message), `503` (unavailable).
+
+- **GET** `/api/predict/health-status/:soh`  
+  Health category for a SoH percentage (0–100).  
+  Path: `soh` float (e.g. 66.7). Responses: `200` (soh_percentage, health_status, health_description), `400` (invalid range), `503` (API unreachable).  
+  Sample: `curl -X GET "http://localhost:3000/api/predict/health-status/66.7"`
 
 **Environment**
 
-- Set `PREDICTION_API_URL` (default `http://localhost:8000`) if the FastAPI service runs elsewhere.
+- `PREDICTION_API_URL` (default `http://localhost:8000`) – set if FastAPI runs elsewhere (e.g. in Docker use `http://fastapi:8000`).
 
 ---
 

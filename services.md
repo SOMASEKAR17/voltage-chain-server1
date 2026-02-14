@@ -71,6 +71,24 @@ Notes / tips:
 - Known brand matching uses a small in-file list (e.g., Tesla, Panasonic, LG, Samsung, CATL, BYD, Sony). Extend as needed.
 - Temporary files are cleaned up automatically; ensure the process has permission to write to the OS temp directory.
 
+## predictionService
+Location: `backend-express/src/services/predictionService.ts`
+
+Purpose: Integrates with the Voltage Chain Battery Prediction API (FastAPI in `fastapi/voltage-chain-server2/`). Reference: `fastapi/voltage-chain-server2/API_ENDPOINTS_REFERENCE.md`, `SURVEY_ENDPOINT_DOCUMENTATION.md`.
+
+Exports:
+- `checkPredictionApiHealth(): Promise<{ status, message? } | null>` — GET /api/health.
+- `getHealthStatus(sohPercentage: number)` — GET /api/health-status/{soh}.
+- `predictRul(payload: PredictRulRequest): Promise<PredictRulResponse>` — POST /api/predict-rul (RUL from measured metrics).
+- `predictRulForListing(battery, survey)` — builds payload from battery + questionnaire and calls predictRul.
+- `buildSurveyCapacityPayload(listingId, survey): PredictCapacitySurveyRequest` — maps UserSurvey to FastAPI survey body (charging_frequency_in_week, avg_temperature).
+- `predictCapacityFromSurvey(payload): Promise<CapacityPredictionResponse>` — POST /api/predict-capacity-survey (survey-based capacity prediction).
+- `predictFullFromSurvey(listingId, survey)` — combined workflow: survey capacity prediction then RUL with predicted capacity; returns `{ survey, rul }`.
+
+Notes:
+- Base URL: `PREDICTION_API_URL` (default `http://localhost:8000`). When running with Docker Compose use `http://fastapi:8000` for the Express service.
+- Survey endpoint uses heuristic/Gemini; optional GEMINI_API_KEY_1..5 in FastAPI .env for fallback keys.
+
 ---
 
 If you want, I can expand these docs with example request payloads, sample responses, or add inline JSDoc comments to the service source files.
