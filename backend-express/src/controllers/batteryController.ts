@@ -46,7 +46,6 @@ export class BatteryController {
             const history = await batteryService.getBatteryHistory(battery_code, brand);
             let nft_exists = false;
             let nft_token_id: string | undefined;
-            let txHash: string | undefined;
             if (history) {
                 nft_exists = true;
                 nft_token_id = history.nft_token_id;
@@ -85,10 +84,9 @@ export class BatteryController {
                     console.error("Failed to upload metadata to IPFS, using placeholder:", error);
                 }
 
-                const { tokenId, txHash: mintTxHash } = await nftService.mintBatteryNFT(battery_code, health_score, ipfsCid, owner_wallet);
-                await batteryService.updateBatteryNFT(battery.id, tokenId, mintTxHash);
+                const { tokenId, txHash } = await nftService.mintBatteryNFT(battery_code, health_score, ipfsCid, owner_wallet);
+                await batteryService.updateBatteryNFT(battery.id, tokenId, txHash);
                 nft_token_id = tokenId;
-                txHash = mintTxHash;
             }
             else {
                 if (nft_token_id) {
@@ -141,7 +139,6 @@ export class BatteryController {
                     nft_token_id,
                     is_new_nft: !nft_exists,
                     listing_url: `/marketplace/${battery.id}`,
-                    txHash,
                 },
             };
             res.json(response);

@@ -9,7 +9,8 @@ export const createQuestionnaire: RequestHandler = async (req, res, next) => {
     try {
         const { listing_id } = req.params;
         const listingId = Array.isArray(listing_id) ? listing_id[0] : listing_id;
-        const runPrediction = req.query.predict === 'true' || req.query.predict === '1';
+        const predictVal = Array.isArray(req.query.predict) ? req.query.predict[0] : req.query.predict;
+        const runPrediction = predictVal === 'true' || predictVal === '1';
         const questionnaire = req.body as QuestionnaireData;
         if (!listingId) {
             return res.status(400).json({ error: 'listing_id is required' });
@@ -36,23 +37,7 @@ export const createQuestionnaire: RequestHandler = async (req, res, next) => {
             try {
                 const battery = await batteryService.getBatteryStatus(listing.battery_id);
                 if (battery) {
-                    // Convert UserSurvey to QuestionnaireData format
-                    const questionnaireData = {
-                        brand_model: result.brand_model,
-                        initial_capacity: result.initial_capacity,
-                        current_capacity: result.current_capacity,
-                        years_owned: result.years_owned,
-                        primary_application: result.primary_application as 'E-bike' | 'E-car',
-                        avg_daily_usage: result.avg_daily_usage as 'Light' | 'Medium' | 'Heavy',
-                        charging_frequency_per_week: result.charging_frequency_per_week,
-                        typical_charge_level: result.typical_charge_level as '20-80' | '0-100' | 'Always Full',
-                        avg_temperature_c: result.avg_temperature_c
-                    };
-                    const rulPayload = predictionService.buildPredictRulPayload(
-                        questionnaireData,
-                        { charging_cycles: battery.charging_cycles }
-                    );
-                    const prediction = await predictionService.predictRul(rulPayload);
+                    const prediction = await predictionService.predictRulForListing(battery, result);
                     payload.prediction = prediction;
                     await listingService.upsertAiEvaluation(listingId, {
                         soh_percentage: prediction.health_analysis.soh_percentage,

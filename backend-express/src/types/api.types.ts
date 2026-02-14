@@ -45,7 +45,6 @@ export interface ListBatteryResponse {
         nft_token_id?: string;
         is_new_nft: boolean;
         listing_url: string;
-        txHash?: string;
     };
 }
 export interface OCRResponse {
@@ -147,22 +146,4 @@ export interface CapacityPredictionResponse {
         total_degradation_percent?: number;
         api_key_used?: string;
     };
-}
-
-/** Request body for POST /api/predict/predict-rul (accepts questionnaire data directly) */
-export interface PredictRulRequestBody {
-    questionnaire: QuestionnaireData;
-    battery?: {
-        charging_cycles?: number;
-    };
-}
-
-/** Request body for POST /api/predict/predict-capacity-survey (accepts questionnaire data directly) */
-export interface PredictCapacitySurveyRequestBody extends QuestionnaireData {
-    // All fields from QuestionnaireData
-}
-
-/** Request body for POST /api/predict/predict-full (accepts questionnaire data directly) */
-export interface PredictFullRequestBody extends QuestionnaireData {
-    // All fields from QuestionnaireData
 }

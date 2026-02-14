@@ -26,18 +26,19 @@ psql -U hack -d localdb -f schema.sql
 psql -U hack -d localdb -f sample.sql
 ```
 
-After loading `sample.sql`, you get:
+After loading **sample.sql**, you get:
 
-| Table | Sample records |
-|-------|----------------|
-| **users** | alice@example.com (0xAAA111), bob@example.com (0xBBB222), charlie@example.com (no wallet) |
-| **batteries** | BAT-001 (Tesla, 75Ah initial / 68.4Ah current, NFT-1001 minted), BAT-002 (Panasonic, 60Ah / 52.1Ah), BAT-003 (LG, 45Ah / 40.2Ah) |
-| **listings** | 3 listings with prices ₹12000, ₹8900, ₹6500; statuses: active, active, draft |
-| **user_surveys** | Tesla Model X Pack (E-car, Heavy, 6x/week), Panasonic EB-60 (E-bike, Medium, 4x/week), LG PowerCell (E-bike, Light, 3x/week) |
-| **ocr_records** | 3 OCR records with confidence scores 94.5%, 91.2%, 88.9% |
-| **user_wallets** | 0xAAA111BBB222 (custodial), 0xCCC333DDD444 (external), 0xEEE555FFF666 (external) |
+| Table | Sample records (from sample.sql) |
+|-------|----------------------------------|
+| **users** | alice@example.com (0xAAA111), bob@example.com (0xBBB222), charlie@example.com |
+| **batteries** | BAT-001 (Tesla, 75Ah), BAT-002 (Panasonic, 60Ah), BAT-003 (LG, 45Ah) |
+| **listings** | 3 listings (active/active/draft), prices 12000, 8900, 6500 |
+| **user_surveys** | Tesla Model X Pack / E-car / Heavy; Panasonic EB-60 / E-bike / Medium; LG PowerCell / E-bike / Light |
+| **user_wallets** | 0xAAA111BBB222, 0xCCC333DDD444, 0xEEE555FFF666 |
 
-Use `GET /api/listings` or `GET /api/battery/:id` to get real UUIDs for path params.
+**All curl examples in this doc use sample.sql data.** Listing and battery IDs are UUIDs (different each run). Get them with:
+- `curl -s http://localhost:3000/api/listings` → use `data[0].id` or `data[0].battery_id`
+- `curl -s "http://localhost:3000/api/listings/find?battery_code=BAT-001"` → use `data.listing_id`
 
 ---
 
@@ -46,16 +47,19 @@ Use `GET /api/listings` or `GET /api/battery/:id` to get real UUIDs for path par
 | Method | Path | Purpose |
 |--------|------|---------|
 | GET | `/api/battery/:id` | Get battery by ID |
-| POST | `/api/battery` | Create battery |
 | POST | `/api/battery/list` | List battery on marketplace, mint NFT |
 | GET | `/api/listings` | Get all listings |
-| GET | `/api/listings/find?battery_code=BAT-001` | Find listing ID by battery code or battery ID |
+| GET | `/api/listings/find` | Find listing by `?battery_code=` or `?battery_id=` |
+| GET | `/api/listings/seed-seller-id` | Get a valid `seller_id` for testing (from sample.sql users) |
+| POST | `/api/listings/create-draft` | Create draft listing + placeholder battery |
 | GET | `/api/listings/:id` | Get listing by ID |
-| POST | `/api/predict/predict-rul` | RUL prediction from questionnaire data (with optional battery metrics) |
-| POST | `/api/predict/predict-capacity-survey` | Survey-only capacity prediction (no measurements needed) |
-| POST | `/api/predict/predict-full` | Combined: survey capacity → then RUL (full analysis) |
-| GET | `/api/predict/health` | Check Battery Prediction API (FastAPI) health |
-| GET | `/api/predict/health-status/:soh` | Health category for SoH % (0–100) |
+| GET | `/api/listings/:id/predict-rul` | **ML** RUL prediction (measured capacity + battery) |
+| GET | `/api/listings/:id/predict-capacity-survey` | **ML** Survey-only capacity prediction |
+| GET | `/api/listings/:id/predict-full` | **ML** Full analysis: survey capacity → RUL |
+| POST | `/api/listings/:id/buy` | Purchase listing (NFT transfer) |
+| DELETE | `/api/listings/:id` | Delete a listing |
+| GET | `/api/predict/health` | **ML** Check FastAPI (prediction service) health |
+| GET | `/api/predict/health-status/:soh` | **ML** Health category for SoH % (0–100) |
 | POST | `/api/ocr/scan-label` | Scan battery label (multipart) |
 | POST | `/api/questionnaire/:listing_id` | Create/update questionnaire (optional `?predict=true`) |
 | GET | `/api/questionnaire/:listing_id` | Get questionnaire |
@@ -68,6 +72,85 @@ Use `GET /api/listings` or `GET /api/battery/:id` to get real UUIDs for path par
 
 ---
 
+## Quick start: ML / prediction routes
+
+These routes call the **FastAPI Battery Prediction API** (ML). Ensure FastAPI is running (e.g. `docker compose up -d` or `python run.py` in `fastapi/voltage-chain-server2/`).
+
+### Order of calls to get ML results
+
+1. **Check ML service is up**
+   ```bash
+   curl -s http://localhost:3000/api/predict/health
+   ```
+   Expect: `{"status":"ok","message":"Battery Prediction API is healthy ✅"}` or `503` if FastAPI is down.
+
+2. **Get a listing ID** (after loading `schema.sql` + `sample.sql`)
+   ```bash
+   curl -s http://localhost:3000/api/listings | jq '.data[0].id'
+   ```
+   Or use the raw JSON and copy one `id` from `data`. Save it as `LISTING_ID` for the next steps.
+
+3. **Questionnaire** – sample.sql already has surveys for all 3 listings. To add/update one (sample.sql-style body):
+   ```bash
+   LISTING_ID=$(curl -s http://localhost:3000/api/listings | jq -r '.data[0].id')
+   curl -X POST "http://localhost:3000/api/questionnaire/$LISTING_ID" \
+     -H "Content-Type: application/json" \
+     -d '{
+       "brand_model": "Tesla Model X Pack",
+       "initial_capacity": 75,
+       "current_capacity": 68.4,
+       "years_owned": 3,
+       "primary_application": "E-car",
+       "avg_daily_usage": "Heavy",
+       "charging_frequency_per_week": 6,
+       "typical_charge_level": "20-80",
+       "avg_temperature_c": 32.5
+     }'
+   ```
+
+4. **Run one of the ML routes** (use `LISTING_ID` from step 2):
+   ```bash
+   LISTING_ID=$(curl -s http://localhost:3000/api/listings | jq -r '.data[0].id')
+   ```
+   | Goal | Command (sample.sql) |
+   |------|----------------------|
+   | **Survey-only capacity** | `curl -s "http://localhost:3000/api/listings/$LISTING_ID/predict-capacity-survey"` |
+   | **Full analysis** | `curl -s "http://localhost:3000/api/listings/$LISTING_ID/predict-full"` |
+   | **RUL (measured)** | `curl -s "http://localhost:3000/api/listings/$LISTING_ID/predict-rul"` |
+
+5. **Health category for a SoH value** (no listing needed)
+   ```bash
+   curl -s "http://localhost:3000/api/predict/health-status/66.7"
+   ```
+   Returns: `soh_percentage`, `health_status` (e.g. POOR), `health_description`.
+
+### One-shot example (with sample data)
+
+```bash
+# 1. Health check
+curl -s http://localhost:3000/api/predict/health
+
+# 2. Get first listing id (requires jq; otherwise use GET /api/listings and copy id manually)
+LISTING_ID=$(curl -s http://localhost:3000/api/listings | jq -r '.data[0].id')
+
+# 3. ML: full analysis (survey → predicted capacity → RUL)
+curl -s "http://localhost:3000/api/listings/$LISTING_ID/predict-full" | jq .
+
+# 4. ML: survey-only capacity
+curl -s "http://localhost:3000/api/listings/$LISTING_ID/predict-capacity-survey" | jq .
+
+# 5. ML: RUL (needs listing with battery + questionnaire; works for sample listings 1–3)
+curl -s "http://localhost:3000/api/listings/$LISTING_ID/predict-rul" | jq .
+```
+
+### What each ML route returns
+
+- **predict-capacity-survey**: `predicted_current_capacity`, `confidence`, `explanation`, `input_summary` (heuristic/Gemini-based).
+- **predict-full**: `survey` (same as above) + `rul` (RUL cycles, health_analysis, recommendations).
+- **predict-rul**: Same as `rul` above (RUL, health_analysis, rul_prediction, recommendations).
+
+---
+
 ### 1. Battery APIs (`/api/battery`)
 
 - **GET** `/api/battery/:id`
@@ -77,9 +160,10 @@ Use `GET /api/listings` or `GET /api/battery/:id` to get real UUIDs for path par
   - **Response**:
     - `200`:
       - `{ "data": Battery | null }`
-  - **Sample** (use battery ID from `GET /api/listings` → `data[].battery_id`):
+  - **Sample** (sample.sql: get battery_id from listings):
     ```bash
-    curl -X GET http://localhost:3000/api/battery/<battery_id>
+    BATTERY_ID=$(curl -s http://localhost:3000/api/listings | jq -r '.data[0].battery_id')
+    curl -s "http://localhost:3000/api/battery/$BATTERY_ID"
     ```
 
 - **POST** `/api/battery`
@@ -96,17 +180,17 @@ Use `GET /api/listings` or `GET /api/battery/:id` to get real UUIDs for path par
       - `{ "data": Battery }`
     - `400`:
       - `{ "error": "invalid payload" }`
-  - **Sample**:
+  - **Sample** (sample.sql-style: Tesla/BAT-001):
     ```bash
     curl -X POST http://localhost:3000/api/battery \
       -H "Content-Type: application/json" \
       -d '{
-        "battery_code": "BAT-1004",
-        "brand": "Exide",
-        "initial_capacity": 100,
-        "current_capacity": 82.5,
+        "battery_code": "BAT-004",
+        "brand": "Tesla",
+        "initial_capacity": 75,
+        "current_capacity": 68.4,
         "manufacture_year": 2021,
-        "charging_cycles": 320
+        "charging_cycles": 420
       }'
     ```
 
@@ -138,8 +222,8 @@ Use `GET /api/listings` or `GET /api/battery/:id` to get real UUIDs for path par
       "message": "Battery listed successfully on marketplace",
       "data": {
         "battery_id": "<uuid>",
-        "battery_code": "BAT-1004",
-        "health_score": 82.5,
+        "battery_code": "BAT-004",
+        "health_score": 91.2,
         "predicted_voltage": 0,
         "current_voltage": 0,
         "nft_token_id": "<optional>",
@@ -148,7 +232,7 @@ Use `GET /api/listings` or `GET /api/battery/:id` to get real UUIDs for path par
       }
     }
     ```
-  - **Sample** (uses sample.sql wallet - alice@example.com):
+  - **Sample** (sample.sql: owner 0xAAA111, Tesla-style questionnaire):
     ```bash
     curl -X POST http://localhost:3000/api/battery/list \
       -H "Content-Type: application/json" \
@@ -161,6 +245,7 @@ Use `GET /api/listings` or `GET /api/battery/:id` to get real UUIDs for path par
         "charging_cycles": 420,
         "owner_wallet": "0xAAA111",
         "questionnaire": {
+          "brand_model": "Tesla Model X Pack",
           "years_owned": 3,
           "primary_application": "E-car",
           "avg_daily_usage": "Heavy",
@@ -180,59 +265,16 @@ Use `GET /api/listings` or `GET /api/battery/:id` to get real UUIDs for path par
     ```json
     {
       "data": [
-        {
-          "id": "<uuid>",
-          "battery_id": "<uuid>",
-          "battery_code": "BAT-001",
-          "brand": "Tesla",
-          "price": 12000,
-          "predicted_voltage": 380.5,
-          "user_voltage": 375.2,
-          "health_score": 91.5,
-          "status": "active",
-          "ai_verified": true,
-          "images": [
-            { "id": "<uuid>", "image_url": "https://...", "image_type": "gallery", "position": 1 },
-            { "id": "<uuid>", "image_url": "https://...", "image_type": "label", "position": 0 }
-          ]
-        },
-        { "battery_code": "BAT-002", "brand": "Panasonic", "status": "active", "price": 8900, ... },
-        { "battery_code": "BAT-003", "brand": "LG", "status": "draft", "price": 6500, ... }
+        { "id": "<uuid>", "battery_id": "<uuid>", "battery_code": "BAT-001", "brand": "Tesla", "price": 12000, "status": "active", "images": [...] },
+        { "battery_code": "BAT-002", "brand": "Panasonic", "price": 8900, ... },
+        { "battery_code": "BAT-003", "brand": "LG", "price": 6500, "status": "draft", ... }
       ]
     }
     ```
-  - **Sample**:
+  - **Sample** (sample.sql):
     ```bash
-    curl -X GET http://localhost:3000/api/listings
+    curl -s http://localhost:3000/api/listings
     ```
-
-- **GET** `/api/listings/find`
-  - **Purpose**: Find listing ID by battery code or battery ID (useful for frontend to look up listings without knowing the UUID).
-  - **Query params** (one required):
-    - `battery_code` (string, optional): Battery code (e.g., "BAT-001")
-    - `battery_id` (string, optional): Battery UUID
-  - **Responses**:
-    - `200`:
-      ```json
-      {
-        "success": true,
-        "data": {
-          "listing_id": "<uuid>",
-          "battery_id": "<uuid>"
-        }
-      }
-      ```
-    - `400`: `{ "error": "Either battery_code or battery_id query parameter is required", "example": "/api/listings/find?battery_code=BAT-001" }`
-    - `404`: `{ "error": "No listing found for the provided battery", "battery_code": "BAT-001" }`
-  - **Sample** (using sample.sql data):
-    ```bash
-    # Find by battery code
-    curl -X GET "http://localhost:3000/api/listings/find?battery_code=BAT-001"
-    
-    # Find by battery ID
-    curl -X GET "http://localhost:3000/api/listings/find?battery_id=<battery_uuid>"
-    ```
-  - **Use case**: Frontend can use this to convert user-friendly battery codes to listing IDs for subsequent API calls.
 
 - **GET** `/api/listings/:id`
   - **Purpose**: Fetch a single listing with images.
@@ -241,9 +283,80 @@ Use `GET /api/listings` or `GET /api/battery/:id` to get real UUIDs for path par
   - **Responses**:
     - `200`: `{ "data": ListingWithImages }`
     - `404`: `{ "error": "Listing not found" }`
-  - **Sample** (use `id` from `GET /api/listings` response):
+  - **Sample** (sample.sql: use first listing id):
     ```bash
-    curl -X GET http://localhost:3000/api/listings/<listing_id>
+    LISTING_ID=$(curl -s http://localhost:3000/api/listings | jq -r '.data[0].id')
+    curl -s "http://localhost:3000/api/listings/$LISTING_ID"
+    ```
+
+- **GET** `/api/listings/find`
+  - **Purpose**: Find a listing by battery code or battery ID.
+  - **Query params**: `battery_code` (string) **or** `battery_id` (string) – one required.
+  - **Responses**:
+    - `200`: `{ "success": true, "data": { "listing_id": "<uuid>", "battery_id": "<uuid>" } }`
+    - `400`: Missing both params. `404`: No listing found.
+  - **Sample** (sample.sql: BAT-001, BAT-002, BAT-003):
+    ```bash
+    curl -s "http://localhost:3000/api/listings/find?battery_code=BAT-001"
+    ```
+
+- **GET** `/api/listings/seed-seller-id`
+  - **Purpose**: Return a valid `seller_id` (first user UUID) for testing POST create-draft. Use after loading sample.sql.
+  - **Response** (`200`): `{ "seller_id": "<uuid>" }` or `404` if no users.
+  - **Sample**:
+    ```bash
+    curl -s http://localhost:3000/api/listings/seed-seller-id
+    ```
+
+- **POST** `/api/listings/create-draft`
+  - **Purpose**: Create a draft listing with a placeholder battery (for questionnaire-first flow).
+  - **Body (JSON)**:
+    - `seller_id` (string, required): user UUID from `GET /api/listings/seed-seller-id`.
+    - `questionnaire` (object, required): full `QuestionnaireData`.
+  - **Response** (`201`): `{ "success": true, "listing_id": "<uuid>", "questionnaire": UserSurvey }`
+  - **Sample** (sample.sql: get seller_id then create draft):
+    ```bash
+    SELLER_ID=$(curl -s http://localhost:3000/api/listings/seed-seller-id | jq -r '.seller_id')
+    curl -X POST http://localhost:3000/api/listings/create-draft \
+      -H "Content-Type: application/json" \
+      -d "{
+        \"seller_id\": \"$SELLER_ID\",
+        \"questionnaire\": {
+          \"brand_model\": \"Tesla Model X Pack\",
+          \"initial_capacity\": 75,
+          \"current_capacity\": 68.4,
+          \"years_owned\": 3,
+          \"primary_application\": \"E-car\",
+          \"avg_daily_usage\": \"Heavy\",
+          \"charging_frequency_per_week\": 6,
+          \"typical_charge_level\": \"20-80\",
+          \"avg_temperature_c\": 32
+        }
+      }"
+    ```
+
+- **POST** `/api/listings/:id/buy`
+  - **Purpose**: Purchase a listing (transfers battery NFT from seller to buyer).
+  - **Body (JSON)**:
+    - `buyer_wallet` (string, required): buyer wallet address.
+  - **Response** (`200`): `{ "success": true, "message": "Listing purchased successfully", "data": { "txHash": "0x..." } }`
+  - **Sample** (sample.sql: buyer 0xBBB222):
+    ```bash
+    LISTING_ID=$(curl -s http://localhost:3000/api/listings | jq -r '.data[0].id')
+    curl -X POST "http://localhost:3000/api/listings/$LISTING_ID/buy" \
+      -H "Content-Type: application/json" \
+      -d '{"buyer_wallet":"0xBBB222"}'
+    ```
+
+- **DELETE** `/api/listings/:id`
+  - **Purpose**: Delete a listing by ID.
+  - **Responses**:
+    - `200`: `{ "success": true, "message": "Listing deleted successfully" }`
+    - `404`: `{ "error": "Listing not found" }`
+  - **Sample** (sample.sql):
+    ```bash
+    LISTING_ID=$(curl -s http://localhost:3000/api/listings | jq -r '.data[0].id')
+    curl -X DELETE "http://localhost:3000/api/listings/$LISTING_ID"
     ```
 
 ---
@@ -267,13 +380,13 @@ Use `GET /api/listings` or `GET /api/battery/:id` to get real UUIDs for path par
       "success": true,
       "message": "OCR extraction completed successfully",
       "data": {
-         "extracted_text": "Tesla 375V 68Ah Battery Pack",
-         "confidence_score": 0.945,
-         "image_url": "https://res.cloudinary.com/...",
-         "battery_code": "BAT-001",
-         "brand": "Tesla",
-         "voltage": 375.4,
-         "capacity": 68,
+        "extracted_text": "Exide 12V 100Ah Made in India",
+        "confidence_score": 0.95,
+        "image_url": "https://res.cloudinary.com/...",
+        "battery_code": "BAT-1001",
+        "brand": "Exide",
+        "voltage": 12,
+        "capacity": 100,
         "manufacture_year": 2021,
         "charging_cycles": null,
         "ocr_record_id": "<uuid>"
@@ -286,9 +399,9 @@ Use `GET /api/listings` or `GET /api/battery/:id` to get real UUIDs for path par
       -F "image=@./battery-label.jpg"
     # With user/battery linkage (use IDs from GET /api/listings):
     curl -X POST http://localhost:3000/api/ocr/scan-label \
-      -F "image=@./battery-label.jpg" \
-      -F "user_id=<user_id>" \
-      -F "battery_id=<battery_id>"
+      -F "image=@./battery-label.jpg"
+    # Optional: link to user/battery (get ids from GET /api/listings)
+    # -F "user_id=$USER_ID" -F "battery_id=$BATTERY_ID"
     ```
 
 ---
@@ -305,21 +418,22 @@ Use `GET /api/listings` or `GET /api/battery/:id` to get real UUIDs for path par
     - `400`: `{ "error": "Missing required fields", "required": [...] }` or `{ "error": "listing_id is required" }`
     - `404`: `{ "error": "Listing not found" }`
     - `201`: `{ "data": UserSurvey }` or with `?predict=true`: `{ "data": UserSurvey, "prediction": PredictRulResponse }` (or `"prediction": { "error": "..." }` if FastAPI is down).
-  - **Sample** (use `listing_id` from `GET /api/listings`):
+  - **Sample** (sample.sql: first listing, Tesla-style survey):
     ```bash
-     curl -X POST http://localhost:3000/api/questionnaire/<listing_id> \
-       -H "Content-Type: application/json" \
-       -d '{
-         "brand_model": "Tesla Model X Pack",
-         "initial_capacity": 75,
-         "current_capacity": 68.4,
-         "years_owned": 3,
-         "primary_application": "E-car",
-         "avg_daily_usage": "Heavy",
-         "charging_frequency_per_week": 6,
-         "typical_charge_level": "20-80",
-         "avg_temperature_c": 32.5
-       }'
+    LISTING_ID=$(curl -s http://localhost:3000/api/listings | jq -r '.data[0].id')
+    curl -X POST "http://localhost:3000/api/questionnaire/$LISTING_ID" \
+      -H "Content-Type: application/json" \
+      -d '{
+        "brand_model": "Tesla Model X Pack",
+        "initial_capacity": 75,
+        "current_capacity": 68.4,
+        "years_owned": 3,
+        "primary_application": "E-car",
+        "avg_daily_usage": "Heavy",
+        "charging_frequency_per_week": 6,
+        "typical_charge_level": "20-80",
+        "avg_temperature_c": 32.5
+      }'
     ```
 
 - **GET** `/api/questionnaire/:listing_id`
@@ -330,127 +444,55 @@ Use `GET /api/listings` or `GET /api/battery/:id` to get real UUIDs for path par
     - `400`: `{ "error": "listing_id is required" }`
     - `404`: `{ "error": "Questionnaire not found" }`
     - `200`: `{ "data": UserSurvey }`
-  - **Sample** (use `listing_id` from `GET /api/listings`):
+  - **Sample** (sample.sql):
     ```bash
-    curl -X GET http://localhost:3000/api/questionnaire/<listing_id>
+    LISTING_ID=$(curl -s http://localhost:3000/api/listings | jq -r '.data[0].id')
+    curl -s "http://localhost:3000/api/questionnaire/$LISTING_ID"
     ```
 
 ---
 
 ### 4a. Battery Prediction (FastAPI integration)
 
-The **Voltage Chain Battery Prediction API** (FastAPI, see `fastapi/voltage-chain-server2/`) runs at `http://localhost:8000` by default. Express accepts questionnaire data in request body and forwards to FastAPI. Reference: `fastapi/voltage-chain-server2/API_ENDPOINTS_REFERENCE.md`, `SURVEY_ENDPOINT_DOCUMENTATION.md`.
-
-> **🔄 REFACTORED:** Prediction endpoints now accept questionnaire data directly in the request body (POST) instead of requiring a listing ID (GET). This allows predictions **before** listing creation.
+The **Voltage Chain Battery Prediction API** (FastAPI, see `fastapi/voltage-chain-server2/`) runs at `http://localhost:8000` by default. Express proxies and maps questionnaire + battery data. Reference: `fastapi/voltage-chain-server2/API_ENDPOINTS_REFERENCE.md`, `SURVEY_ENDPOINT_DOCUMENTATION.md`.
 
 **Which endpoint to use**
 
 | Scenario | Endpoint | Description |
 |----------|----------|--------------|
-| You have **measured** capacity (current_capacity known) | `POST /api/predict/predict-rul` | RUL from real metrics; accepts questionnaire + optional battery data in body. |
-| You have **only survey** (no current capacity) | `POST /api/predict/predict-capacity-survey` | Predicts current capacity from survey (heuristic/Gemini); questionnaire in body. |
-| **Full analysis** from survey only | `POST /api/predict/predict-full` | 1) Predict capacity from survey, 2) Run RUL with that capacity; returns both `survey` and `rul`. |
+| You have **measured** capacity + battery (e.g. questionnaire has current_capacity) | `GET /api/listings/:id/predict-rul` | RUL from real metrics; requires battery + questionnaire. |
+| You have **only survey** (no current capacity) | `GET /api/listings/:id/predict-capacity-survey` | Predicts current capacity from survey (heuristic/Gemini); no battery required. |
+| **Full analysis** from survey only | `GET /api/listings/:id/predict-full` | 1) Predict capacity from survey, 2) Run RUL with that capacity; returns both `survey` and `rul`. |
 
-**Recommended flow (NEW)**
+**Recommended flow**
 
-1. User answers **questionnaire** (no listing required)
-2. Call prediction endpoint with questionnaire data in request body:
-   - **Measured path**: `POST /api/predict/predict-rul` (if you have current_capacity)
-   - **Survey-only path**: `POST /api/predict/predict-capacity-survey` (no current_capacity needed)
-   - **Combined path**: `POST /api/predict/predict-full` (survey → predicted capacity → RUL)
-3. Show prediction results to user
-4. If user approves, create listing with verified data
+1. User completes **questionnaire**: `POST /api/questionnaire/:listing_id` (optionally `?predict=true` to run RUL and store in `ai_evaluations`).
+2. Then call one of:
+   - **Measured path**: `GET /api/listings/:id/predict-rul` (needs listing with battery + questionnaire).
+   - **Survey-only path**: `GET /api/listings/:id/predict-capacity-survey` (questionnaire only).
+   - **Combined path**: `GET /api/listings/:id/predict-full` (survey → predicted capacity → RUL in one response).
 
 **Field mapping (questionnaire → FastAPI)**
 
-- **predict-rul**: `initial_capacity`, `current_capacity`, `cycle_count` (from battery.charging_cycles or estimated), `age_days` = years_owned × 365, `ambient_temperature` = avg_temperature_c or 25.
-- **predict-capacity-survey**: `listing_id` (temp placeholder), `brand_model`, `initial_capacity`, `years_owned`, `primary_application`, `avg_daily_usage`, `charging_frequency_in_week`, `typical_charge_level`, `avg_temperature`.
+- **predict-rul**: `initial_capacity`, `current_capacity` (from questionnaire or battery), `cycle_count` (battery or estimated), `age_days` = years_owned × 365, `ambient_temperature` = avg_temperature_c or 25.
+- **predict-capacity-survey**: `listing_id`, `brand_model`, `initial_capacity`, `years_owned`, `primary_application`, `avg_daily_usage`, `charging_frequency_in_week` (= our `charging_frequency_per_week`), `typical_charge_level`, `avg_temperature` (= our `avg_temperature_c` or 25).
 
 **Endpoints**
 
-- **POST** `/api/predict/predict-rul`  
-  **Purpose**: RUL prediction from questionnaire data with optional battery metrics.  
-  **Body (JSON)**:
-  ```json
-  {
-    "questionnaire": {
-      "brand_model": "Tesla Model X Pack",
-      "initial_capacity": 75,
-      "current_capacity": 68.4,
-      "years_owned": 3,
-      "primary_application": "E-car",
-      "avg_daily_usage": "Heavy",
-      "charging_frequency_per_week": 6,
-      "typical_charge_level": "20-80",
-      "avg_temperature_c": 32.5
-    },
-    "battery": {
-      "charging_cycles": 420
-    }
-  }
-  ```
-  **Required fields**: `brand_model`, `initial_capacity`, `current_capacity`, `years_owned`, `primary_application`, `avg_daily_usage`, `charging_frequency_per_week`, `typical_charge_level`  
-  **Optional fields**: `avg_temperature_c` (default 25), `battery.charging_cycles` (estimated if not provided)  
-  **Responses**: `200` (full prediction), `400` (missing/invalid fields)  
-  **Sample**:
-  ```bash
-  curl -X POST http://localhost:3000/api/predict/predict-rul \
-    -H "Content-Type: application/json" \
-    -d '{
-      "questionnaire": {
-        "brand_model": "Tesla Model X Pack",
-        "initial_capacity": 75,
-        "current_capacity": 68.4,
-        "years_owned": 3,
-        "primary_application": "E-car",
-        "avg_daily_usage": "Heavy",
-        "charging_frequency_per_week": 6,
-        "typical_charge_level": "20-80",
-        "avg_temperature_c": 32.5
-      },
-      "battery": { "charging_cycles": 420 }
-    }'
-  ```
+- **GET** `/api/listings/:id/predict-rul`  
+  RUL prediction using battery + questionnaire (measured data).  
+  Responses: `200` (full prediction), `400`/`404` (missing data or API error).  
+  Sample: `LISTING_ID=$(curl -s http://localhost:3000/api/listings | jq -r '.data[0].id'); curl -s "http://localhost:3000/api/listings/$LISTING_ID/predict-rul"`
 
-- **POST** `/api/predict/predict-capacity-survey`  
-  **Purpose**: Survey-based capacity prediction (no measured current capacity needed).  
-  **Body (JSON)**: Questionnaire data (same as above but without `current_capacity`)  
-  **Response**: `200` with `predicted_current_capacity`, `confidence`, `explanation`, `input_summary`  
-  **Sample**:
-  ```bash
-  curl -X POST http://localhost:3000/api/predict/predict-capacity-survey \
-    -H "Content-Type: application/json" \
-    -d '{
-      "brand_model": "Panasonic EB-60",
-      "initial_capacity": 60,
-      "years_owned": 4,
-      "primary_application": "E-bike",
-      "avg_daily_usage": "Medium",
-      "charging_frequency_per_week": 4,
-      "typical_charge_level": "0-100",
-      "avg_temperature_c": 29
-    }'
-  ```
+- **GET** `/api/listings/:id/predict-capacity-survey`  
+  Survey-based capacity prediction only (no measured current capacity).  
+  Responses: `200` (`predicted_current_capacity`, `confidence`, `explanation`, `input_summary`), `400` (e.g. questionnaire missing).  
+  Sample: `LISTING_ID=$(curl -s http://localhost:3000/api/listings | jq -r '.data[0].id'); curl -s "http://localhost:3000/api/listings/$LISTING_ID/predict-capacity-survey"`
 
-- **POST** `/api/predict/predict-full`  
-  **Purpose**: Combined workflow - predicts capacity from survey, then runs RUL with predicted capacity.  
-  **Body (JSON)**: Questionnaire data (without `current_capacity`)  
-  **Response**: `200` with `{ "survey": CapacityPredictionResponse, "rul": PredictRulResponse }`  
-  **Sample**:
-  ```bash
-  curl -X POST http://localhost:3000/api/predict/predict-full \
-    -H "Content-Type: application/json" \
-    -d '{
-      "brand_model": "LG PowerCell",
-      "initial_capacity": 45,
-      "years_owned": 2,
-      "primary_application": "E-bike",
-      "avg_daily_usage": "Light",
-      "charging_frequency_per_week": 3,
-      "typical_charge_level": "Always Full",
-      "avg_temperature_c": 26.8
-    }'
-  ```
+- **GET** `/api/listings/:id/predict-full`  
+  Combined: predict capacity from survey, then RUL with that capacity.  
+  Response: `200` with `{ "survey": CapacityPredictionResponse, "rul": PredictRulResponse }`.  
+  Sample: `LISTING_ID=$(curl -s http://localhost:3000/api/listings | jq -r '.data[0].id'); curl -s "http://localhost:3000/api/listings/$LISTING_ID/predict-full"`
 
 - **GET** `/api/predict/health`  
   Check if FastAPI is reachable.  
@@ -464,18 +506,6 @@ The **Voltage Chain Battery Prediction API** (FastAPI, see `fastapi/voltage-chai
 **Environment**
 
 - `PREDICTION_API_URL` (default `http://localhost:8000`) – set if FastAPI runs elsewhere (e.g. in Docker use `http://fastapi:8000`).
-
-**Migration from old API**
-
-If you were using the old listing-based endpoints:
-- ❌ Old: `GET /api/listings/:id/predict-rul` (required listing ID)
-- ✅ New: `POST /api/predict/predict-rul` (questionnaire data in body)
-
-Benefits:
-- ✅ Predictions work **before** listing creation
-- ✅ No database dependencies
-- ✅ Simpler workflow
-- ✅ Easier testing
 
 ---
 
@@ -519,11 +549,11 @@ Benefits:
       "data": { "tokenId": "<string>", "txHash": "0x..." }
     }
     ```
-   - **Sample** (uses sample.sql battery/wallet - alice@example.com):
-     ```bash
-     curl -X POST http://localhost:3000/api/nft/mint \
-       -H "Content-Type: application/json" \
-       -d '{"battery_code":"BAT-001","owner_wallet":"0xAAA111","cid":"QmPlaceholderCid","health_score":91.5}'
+  - **Sample** (sample.sql: BAT-001, owner 0xAAA111):
+    ```bash
+    curl -X POST http://localhost:3000/api/nft/mint \
+      -H "Content-Type: application/json" \
+      -d '{"battery_code":"BAT-001","owner_wallet":"0xAAA111","cid":"QmPlaceholderCid","health_score":91.2}'
     ```
 
 - **POST** `/api/nft/update-metadata`
@@ -560,11 +590,11 @@ Benefits:
       "data": { "tokenId": "<string>", "txHash": "0x..." }
     }
     ```
-   - **Sample** (sample.sql wallets: Alice 0xAAA111 → Bob 0xBBB222):
-     ```bash
-     curl -X POST http://localhost:3000/api/nft/transfer \
-       -H "Content-Type: application/json" \
-       -d '{"tokenId":"1","from":"0xAAA111","to":"0xBBB222"}'
+  - **Sample** (sample.sql: 0xAAA111 → 0xBBB222):
+    ```bash
+    curl -X POST http://localhost:3000/api/nft/transfer \
+      -H "Content-Type: application/json" \
+      -d '{"tokenId":"1","from":"0xAAA111","to":"0xBBB222"}'
     ```
 
 - **POST** `/api/nft/burn`
@@ -600,37 +630,38 @@ Benefits:
       }
     }
     ```
-   - **Sample** (use numeric `tokenId` from mint response; sample.sql BAT-001 has NFT-1001 minted):
+  - **Sample** (sample.sql: BAT-001 has NFT-1001; use tokenId from mint response):
     ```bash
-    curl -X GET http://localhost:3000/api/nft/1
+    curl -s http://localhost:3000/api/nft/1
     ```
 
-**NFT test sequence** (run in order; requires RPC, contract, private key):
+**NFT test sequence** (sample.sql: run in order; requires RPC, contract, private key):
 
 ```bash
-# 1. Mint NFT (using sample.sql data)
-curl -X POST http://localhost:3000/api/nft/mint \
+# 1. Mint NFT (sample.sql: BAT-001, 0xAAA111)
+curl -s -X POST http://localhost:3000/api/nft/mint \
   -H "Content-Type: application/json" \
-  -d '{"battery_code":"BAT-002","owner_wallet":"0xBBB222","cid":"QmPlaceholderCid","health_score":86.2}'
+  -d '{"battery_code":"BAT-001","owner_wallet":"0xAAA111","cid":"QmPlaceholderCid","health_score":91.2}'
 # → Save tokenId from response
 
 # 2. Get NFT on-chain
-curl -X GET http://localhost:3000/api/nft/<tokenId>
+TOKEN_ID=1   # or from step 1 response
+curl -s "http://localhost:3000/api/nft/$TOKEN_ID"
 
 # 3. Update metadata
-curl -X POST http://localhost:3000/api/nft/update-metadata \
+curl -s -X POST http://localhost:3000/api/nft/update-metadata \
   -H "Content-Type: application/json" \
-  -d '{"tokenId":"<tokenId>","cid":"QmNewMetadataCid123"}'
+  -d "{\"tokenId\":\"$TOKEN_ID\",\"cid\":\"QmNewMetadataCid123\"}"
 
-# 4. Transfer (Alice → Bob using sample.sql wallets)
-curl -X POST http://localhost:3000/api/nft/transfer \
+# 4. Transfer (sample.sql: 0xAAA111 → 0xBBB222)
+curl -s -X POST http://localhost:3000/api/nft/transfer \
   -H "Content-Type: application/json" \
-  -d '{"tokenId":"<tokenId>","from":"0xAAA111","to":"0xBBB222"}'
+  -d "{\"tokenId\":\"$TOKEN_ID\",\"from\":\"0xAAA111\",\"to\":\"0xBBB222\"}"
 
-# 5. Burn (optional; destroys NFT)
-curl -X POST http://localhost:3000/api/nft/burn \
+# 5. Burn (optional)
+curl -s -X POST http://localhost:3000/api/nft/burn \
   -H "Content-Type: application/json" \
-  -d '{"tokenId":"<tokenId>"}'
+  -d "{\"tokenId\":\"$TOKEN_ID\"}"
 ```
 
 

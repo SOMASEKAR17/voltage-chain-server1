@@ -1,41 +1,41 @@
 import { RequestHandler } from 'express';
+import * as listingService from '../services/listingService';
+import * as batteryService from '../services/batteryService';
+import * as questionnaireService from '../services/questionnaireService';
 import * as predictionService from '../services/predictionService';
-import {
-    PredictRulRequestBody,
-    PredictCapacitySurveyRequestBody,
-    PredictFullRequestBody,
-} from '../types/api.types';
 
-/**
- * POST /api/predict/predict-rul
- * RUL prediction from questionnaire data (accepts body with questionnaire + optional battery data).
- */
-export const postPredictRul: RequestHandler = async (req, res, next) => {
+
+export const getPredictRul: RequestHandler = async (req, res, next) => {
     try {
-        const body = req.body as PredictRulRequestBody;
-
-        if (!body.questionnaire) {
-            return res.status(400).json({ error: 'questionnaire data is required in request body' });
+        const { id } = req.params;
+        const listingId = Array.isArray(id) ? id[0] : id;
+        if (!listingId) {
+            return res.status(400).json({ error: 'listing id is required' });
         }
 
-        // Validate required questionnaire fields
-        const q = body.questionnaire;
-        if (!q.brand_model || !q.initial_capacity || !q.current_capacity ||
-            q.years_owned === undefined || !q.primary_application ||
-            !q.avg_daily_usage || !q.charging_frequency_per_week || !q.typical_charge_level) {
+        const listing = await listingService.getListingById(listingId);
+        if (!listing) {
+            return res.status(404).json({ error: 'Listing not found' });
+        }
+        if (!listing.battery_id) {
             return res.status(400).json({
-                error: 'Missing required questionnaire fields',
-                required: ['brand_model', 'initial_capacity', 'current_capacity', 'years_owned',
-                    'primary_application', 'avg_daily_usage', 'charging_frequency_per_week',
-                    'typical_charge_level']
+                error: 'Listing has no battery. Add a battery to run prediction.',
             });
         }
 
-        const payload = predictionService.buildPredictRulPayload(
-            body.questionnaire,
-            body.battery
-        );
-        const result = await predictionService.predictRul(payload);
+        const battery = await batteryService.getBatteryStatus(listing.battery_id);
+        if (!battery) {
+            return res.status(404).json({ error: 'Battery not found' });
+        }
+
+        const survey = await questionnaireService.getQuestionnaireByListingId(listingId);
+        if (!survey) {
+            return res.status(400).json({
+                error: 'Questionnaire required. Submit a questionnaire for this listing before running prediction.',
+            });
+        }
+
+        const result = await predictionService.predictRulForListing(battery, survey);
         res.json(result);
     } catch (err) {
         const message = err instanceof Error ? err.message : 'Prediction failed';
@@ -44,28 +44,28 @@ export const postPredictRul: RequestHandler = async (req, res, next) => {
 };
 
 /**
- * POST /api/predict/predict-capacity-survey
+ * GET /api/listings/:id/predict-capacity-survey
  * Survey-based capacity prediction (FastAPI /api/predict-capacity-survey).
- * Accepts questionnaire data in request body.
+ * Use when only questionnaire data is available; no measured current capacity required.
  */
-export const postPredictCapacitySurvey: RequestHandler = async (req, res) => {
+export const getPredictCapacitySurvey: RequestHandler = async (req, res) => {
     try {
-        const questionnaire = req.body as PredictCapacitySurveyRequestBody;
-
-        // Validate required fields
-        if (!questionnaire.brand_model || !questionnaire.initial_capacity ||
-            questionnaire.years_owned === undefined || !questionnaire.primary_application ||
-            !questionnaire.avg_daily_usage || !questionnaire.charging_frequency_per_week ||
-            !questionnaire.typical_charge_level) {
+        const { id } = req.params;
+        const listingId = Array.isArray(id) ? id[0] : id;
+        if (!listingId) {
+            return res.status(400).json({ error: 'listing id is required' });
+        }
+        const listing = await listingService.getListingById(listingId);
+        if (!listing) {
+            return res.status(404).json({ error: 'Listing not found' });
+        }
+        const survey = await questionnaireService.getQuestionnaireByListingId(listingId);
+        if (!survey) {
             return res.status(400).json({
-                error: 'Missing required questionnaire fields',
-                required: ['brand_model', 'initial_capacity', 'years_owned',
-                    'primary_application', 'avg_daily_usage', 'charging_frequency_per_week',
-                    'typical_charge_level']
+                error: 'Questionnaire required. Submit a questionnaire for this listing first.',
             });
         }
-
-        const payload = predictionService.buildSurveyCapacityPayload(questionnaire);
+        const payload = predictionService.buildSurveyCapacityPayload(listingId, survey);
         const result = await predictionService.predictCapacityFromSurvey(payload);
         res.json(result);
     } catch (err) {
@@ -75,29 +75,28 @@ export const postPredictCapacitySurvey: RequestHandler = async (req, res) => {
 };
 
 /**
- * POST /api/predict/predict-full
+ * GET /api/listings/:id/predict-full
  * Combined workflow: 1) predict current capacity from survey, 2) run RUL with predicted capacity.
  * Returns both survey capacity prediction and full RUL/health/recommendations.
- * Accepts questionnaire data in request body.
  */
-export const postPredictFull: RequestHandler = async (req, res) => {
+export const getPredictFull: RequestHandler = async (req, res) => {
     try {
-        const questionnaire = req.body as PredictFullRequestBody;
-
-        // Validate required fields
-        if (!questionnaire.brand_model || !questionnaire.initial_capacity ||
-            questionnaire.years_owned === undefined || !questionnaire.primary_application ||
-            !questionnaire.avg_daily_usage || !questionnaire.charging_frequency_per_week ||
-            !questionnaire.typical_charge_level) {
+        const { id } = req.params;
+        const listingId = Array.isArray(id) ? id[0] : id;
+        if (!listingId) {
+            return res.status(400).json({ error: 'listing id is required' });
+        }
+        const listing = await listingService.getListingById(listingId);
+        if (!listing) {
+            return res.status(404).json({ error: 'Listing not found' });
+        }
+        const survey = await questionnaireService.getQuestionnaireByListingId(listingId);
+        if (!survey) {
             return res.status(400).json({
-                error: 'Missing required questionnaire fields',
-                required: ['brand_model', 'initial_capacity', 'years_owned',
-                    'primary_application', 'avg_daily_usage', 'charging_frequency_per_week',
-                    'typical_charge_level']
+                error: 'Questionnaire required. Submit a questionnaire for this listing first.',
             });
         }
-
-        const result = await predictionService.predictFullFromSurvey(questionnaire);
+        const result = await predictionService.predictFullFromSurvey(listingId, survey);
         res.json(result);
     } catch (err) {
         const message = err instanceof Error ? err.message : 'Prediction failed';

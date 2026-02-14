@@ -45,11 +45,11 @@ export async function getListings(): Promise<ListingWithImages[]> {
         const images = (imagesByListing.get(row.id) || [])
             .sort((a, b) => a.position - b.position)
             .map((img): ListingImage => ({
-                id: img.id,
-                image_url: getImageUrl(img.image_url),
-                image_type: img.image_type as 'gallery' | 'label',
-                position: img.position,
-            }));
+            id: img.id,
+            image_url: getImageUrl(img.image_url),
+            image_type: img.image_type as 'gallery' | 'label',
+            position: img.position,
+        }));
         return {
             id: row.id,
             battery_id: row.battery_id,
@@ -85,19 +85,48 @@ export async function getListingByBatteryId(batteryId: string): Promise<string |
     return result.rows.length > 0 ? result.rows[0].id : null;
 }
 
-/**
- * Find listing ID by battery code (useful for frontend lookups)
- */
-export async function getListingByBatteryCode(batteryCode: string): Promise<{ listing_id: string; battery_id: string } | null> {
-    const result = await query<{
-        listing_id: string;
-        battery_id: string;
-    }>(`SELECT l.id as listing_id, b.id as battery_id
-     FROM public.listings l
-     JOIN public.batteries b ON b.id = l.battery_id
-     WHERE b.battery_code = $1
-     LIMIT 1`, [batteryCode]);
+/** Find listing by battery_code (looks up battery_id from batteries then listing). */
+export async function getListingByBatteryCode(
+    batteryCode: string
+): Promise<{ listing_id: string; battery_id: string } | null> {
+    const result = await query<{ listing_id: string; battery_id: string }>(
+        `SELECT l.id AS listing_id, l.battery_id
+         FROM public.listings l
+         JOIN public.batteries b ON b.id = l.battery_id
+         WHERE b.battery_code = $1 LIMIT 1`,
+        [batteryCode]
+    );
     return result.rows.length > 0 ? result.rows[0] : null;
+}
+
+/**
+ * Create a draft listing with a placeholder battery (for questionnaire-first flow).
+ * Returns the new listing id.
+ */
+export async function createDraftListing(sellerId: string): Promise<string> {
+    const batteryResult = await query<{ id: string }>(
+        `INSERT INTO public.batteries (battery_code, brand) VALUES ($1, $2) RETURNING id`,
+        [`DRAFT-${Date.now()}`, 'Draft']
+    );
+    const batteryId = batteryResult.rows[0].id;
+    const listingResult = await query<{ id: string }>(
+        `INSERT INTO public.listings (battery_id, seller_id, price, status)
+         VALUES ($1, $2, 0, 'draft') RETURNING id`,
+        [batteryId, sellerId]
+    );
+    return listingResult.rows[0].id;
+}
+
+/** Return a valid seller_id (first user id) for testing draft listing. */
+export async function getSeedSellerId(): Promise<string | null> {
+    const result = await query<{ id: string }>(`SELECT id FROM public.users LIMIT 1`);
+    return result.rows.length > 0 ? result.rows[0].id : null;
+}
+
+/** Delete a listing by id. Returns true if a row was deleted. */
+export async function deleteListing(listingId: string): Promise<boolean> {
+    const result = await query(`DELETE FROM public.listings WHERE id = $1`, [listingId]);
+    return (result.rowCount ?? 0) > 0;
 }
 export async function getListingById(id: string): Promise<ListingWithImages | null> {
     const listingResult = await query<ListingRow>(`SELECT l.id, l.battery_id, l.price, l.predicted_voltage, l.user_voltage,
@@ -184,16 +213,16 @@ export async function buyListing(listingId: string, buyerWallet: string): Promis
     const sellerWallet = sellerResult.rows[0].wallet_address;
 
     if (!sellerWallet) {
-        throw new Error('Seller has no wallet address linked');
+         throw new Error('Seller has no wallet address linked');
     }
-
+    
     // 3. Get NFT Token ID
     // We have battery_id from listing. Need to get token ID.
     const batteryResult = await query<{ nft_token_id: string }>(
         `SELECT nft_token_id FROM public.batteries WHERE id = $1`,
         [listing.battery_id]
     );
-    if (batteryResult.rows.length === 0 || !batteryResult.rows[0].nft_token_id) {
+     if (batteryResult.rows.length === 0 || !batteryResult.rows[0].nft_token_id) {
         throw new Error('Battery NFT not found');
     }
     const tokenId = batteryResult.rows[0].nft_token_id;
