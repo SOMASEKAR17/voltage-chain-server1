@@ -49,6 +49,7 @@ Use `GET /api/listings` or `GET /api/battery/:id` to get real UUIDs for path par
 | POST | `/api/battery` | Create battery |
 | POST | `/api/battery/list` | List battery on marketplace, mint NFT |
 | GET | `/api/listings` | Get all listings |
+| GET | `/api/listings/find?battery_code=BAT-001` | Find listing ID by battery code or battery ID |
 | GET | `/api/listings/:id` | Get listing by ID |
 | POST | `/api/predict/predict-rul` | RUL prediction from questionnaire data (with optional battery metrics) |
 | POST | `/api/predict/predict-capacity-survey` | Survey-only capacity prediction (no measurements needed) |
@@ -204,6 +205,34 @@ Use `GET /api/listings` or `GET /api/battery/:id` to get real UUIDs for path par
     ```bash
     curl -X GET http://localhost:3000/api/listings
     ```
+
+- **GET** `/api/listings/find`
+  - **Purpose**: Find listing ID by battery code or battery ID (useful for frontend to look up listings without knowing the UUID).
+  - **Query params** (one required):
+    - `battery_code` (string, optional): Battery code (e.g., "BAT-001")
+    - `battery_id` (string, optional): Battery UUID
+  - **Responses**:
+    - `200`:
+      ```json
+      {
+        "success": true,
+        "data": {
+          "listing_id": "<uuid>",
+          "battery_id": "<uuid>"
+        }
+      }
+      ```
+    - `400`: `{ "error": "Either battery_code or battery_id query parameter is required", "example": "/api/listings/find?battery_code=BAT-001" }`
+    - `404`: `{ "error": "No listing found for the provided battery", "battery_code": "BAT-001" }`
+  - **Sample** (using sample.sql data):
+    ```bash
+    # Find by battery code
+    curl -X GET "http://localhost:3000/api/listings/find?battery_code=BAT-001"
+    
+    # Find by battery ID
+    curl -X GET "http://localhost:3000/api/listings/find?battery_id=<battery_uuid>"
+    ```
+  - **Use case**: Frontend can use this to convert user-friendly battery codes to listing IDs for subsequent API calls.
 
 - **GET** `/api/listings/:id`
   - **Purpose**: Fetch a single listing with images.
