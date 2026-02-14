@@ -110,8 +110,9 @@ export const getPredictFull: RequestHandler = async (req, res) => {
  */
 export const getHealthStatus: RequestHandler = async (req, res) => {
     try {
-        const soh = req.params.soh;
-        const sohNum = parseFloat(soh);
+        const sohParam = req.params.soh;
+        const soh = Array.isArray(sohParam) ? sohParam[0] : sohParam;
+        const sohNum = parseFloat(soh ?? '');
         if (Number.isNaN(sohNum) || sohNum < 0 || sohNum > 100) {
             return res.status(400).json({ error: 'SoH percentage must be between 0 and 100' });
         }

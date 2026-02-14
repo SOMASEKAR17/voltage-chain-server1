@@ -1,6 +1,17 @@
+# Voltage Chain - full stack: Postgres, FastAPI (Battery Prediction), Express API
+#
+# Usage:
+#   docker compose up -d
+#   # First time: apply schema and optional seed
+#   docker compose exec -T postgres psql -U hack -d localdb < schema.sql
+#   docker compose exec -T postgres psql -U hack -d localdb < sample.sql
+#
+# Endpoints: Express http://localhost:3000 | FastAPI http://localhost:8000 | Postgres localhost:5432
+
 services:
   postgres:
     image: postgres:16
+    container_name: voltage-chain-postgres
     environment:
       POSTGRES_USER: hack
       POSTGRES_PASSWORD: hackpass
@@ -14,17 +25,43 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+      start_period: 5s
 
-  # Voltage Chain Battery Prediction API (FastAPI) - see fastapi/voltage-chain-server2/
   fastapi:
     build:
       context: ./fastapi/voltage-chain-server2
       dockerfile: Dockerfile
+    container_name: voltage-chain-fastapi
     ports:
       - "8000:8000"
     env_file:
       - ./fastapi/voltage-chain-server2/.env
-    # Optional: GEMINI_API_KEY_1..5 for /api/predict-capacity-survey
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')\" || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: voltage-chain-app
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      DATABASE_URL: postgresql://hack:hackpass@postgres:5432/localdb
+      PREDICTION_API_URL: http://fastapi:8000
+      # Optional: add CLOUDINARY_*, GEMINI_API_KEY, etc. here or use env_file: [".env"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      fastapi:
+        condition: service_healthy
+    restart: unless-stopped
 
 volumes:
   pgdata:

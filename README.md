@@ -49,10 +49,33 @@ Optional:
 
 - `DATABASE_URL=postgresql://hack:hackpass@localhost:5432/localdb`
 
-### 3. Start PostgreSQL
+### 3. Start services
+
+**Option A – Run entire project with Docker (recommended)**
+
+Runs Postgres, FastAPI (Battery Prediction API), and the Express app:
 
 ```bash
 docker compose up -d
+```
+
+First time only, apply schema and optional seed:
+
+```bash
+docker compose exec -T postgres psql -U hack -d localdb < schema.sql
+docker compose exec -T postgres psql -U hack -d localdb < sample.sql
+```
+
+- **Express API:** http://localhost:3000  
+- **FastAPI (prediction):** http://localhost:8000  
+- **Postgres:** localhost:5432 (user `hack`, db `localdb`)
+
+To add optional env (e.g. Cloudinary), create a `.env` in the project root and add `env_file: [".env"]` under the `app` service in `docker-compose.yml`, or set `environment` there.
+
+**Option B – Postgres only (run app locally)**
+
+```bash
+docker compose up -d postgres
 ```
 
 ### 4. Apply database schema (first time)
