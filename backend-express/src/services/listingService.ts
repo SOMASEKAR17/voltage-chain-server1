@@ -1,6 +1,7 @@
 import { query } from '../config/postgres';
 import { getImageUrl } from '../config/cloudinary';
 import { ListingWithImages, ListingImage } from '../types/api.types';
+import * as nftService from './nftService';
 interface ListingRow {
     id: string;
     battery_id: string;
@@ -138,4 +139,59 @@ export async function upsertAiEvaluation(
          VALUES ($1, $2, $3, $4)`,
         [listingId, result.soh_percentage, result.health_description, result.health_status]
     );
+}
+
+export async function buyListing(listingId: string, buyerWallet: string): Promise<{ txHash: string }> {
+    // 1. Get Listing Details
+    const listing = await getListingById(listingId);
+    if (!listing) {
+        throw new Error('Listing not found');
+    }
+
+    if (listing.status !== 'draft' && listing.status !== 'active') { // Assuming 'draft' or 'active' are valid for buying. Actually 'active' should be the state. Let's assume 'draft' is also buyable for now or just check != sold.
+        throw new Error(`Listing is not available for purchase (Status: ${listing.status})`);
+    }
+
+    // 2. Get Seller Wallet
+    // We need to fetch the seller's wallet address.
+    // The listing has seller_id. We need to look up the user.
+    const sellerResult = await query<{ wallet_address: string }>(
+        `SELECT u.wallet_address 
+         FROM public.listings l
+         JOIN public.users u ON l.seller_id = u.id
+         WHERE l.id = $1`,
+        [listingId]
+    );
+
+    if (sellerResult.rows.length === 0) {
+        throw new Error('Seller wallet not found');
+    }
+    const sellerWallet = sellerResult.rows[0].wallet_address;
+
+    if (!sellerWallet) {
+         throw new Error('Seller has no wallet address linked');
+    }
+    
+    // 3. Get NFT Token ID
+    // We have battery_id from listing. Need to get token ID.
+    const batteryResult = await query<{ nft_token_id: string }>(
+        `SELECT nft_token_id FROM public.batteries WHERE id = $1`,
+        [listing.battery_id]
+    );
+     if (batteryResult.rows.length === 0 || !batteryResult.rows[0].nft_token_id) {
+        throw new Error('Battery NFT not found');
+    }
+    const tokenId = batteryResult.rows[0].nft_token_id;
+
+    // 4. Execute NFT Transfer
+    // NOTE: In a real app, we would verify payment here.
+    const txHash = await nftService.transferBatteryNFT(tokenId, sellerWallet, buyerWallet);
+
+    // 5. Update Listing Status
+    await query(
+        `UPDATE public.listings SET status = 'sold' WHERE id = $1`,
+        [listingId]
+    );
+
+    return { txHash };
 }

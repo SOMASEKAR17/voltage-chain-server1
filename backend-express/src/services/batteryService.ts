@@ -133,10 +133,13 @@ export async function recordHistoryEvent(params: {
     battery_code: string;
     brand: string;
     event_type: string;
+    health_status?: string;
     voltage?: number;
     soh_percent?: number;
     notes?: string;
     ipfs_hash?: string;
+    owner_wallet?: string;
+    nft_token_id?: string;
 }): Promise<void> {
     const batteryResult = await query<{
         id: string;
@@ -144,13 +147,66 @@ export async function recordHistoryEvent(params: {
     if (batteryResult.rows.length === 0)
         return;
     const battery_id = batteryResult.rows[0].id;
+
+    let finalNotes = params.notes || '';
+    if (params.owner_wallet) {
+        finalNotes += ` | Owner: ${params.owner_wallet}`;
+    }
+    if (params.nft_token_id) {
+        finalNotes += ` | TokenID: ${params.nft_token_id}`;
+    }
+    // Trim leading separator if notes was empty
+    if (finalNotes.startsWith(' | ')) {
+        finalNotes = finalNotes.substring(3);
+    }
+
     await query(`INSERT INTO public.battery_history (battery_id, event_type, voltage, soh_percent, notes, ipfs_hash)
      VALUES ($1, $2, $3, $4, $5, $6)`, [
         battery_id,
         params.event_type,
         params.voltage ?? null,
         params.soh_percent ?? null,
-        params.notes ?? null,
+        finalNotes || null,
         params.ipfs_hash ?? null,
     ]);
 }
+
+export async function getBatteryIdByCode(battery_code: string): Promise<{ id: string, brand: string } | null> {
+    const result = await query<{ id: string, brand: string }>(
+        `SELECT id, brand FROM public.batteries WHERE battery_code = $1 LIMIT 1`,
+        [battery_code]
+    );
+    if (result.rows.length === 0) return null;
+    return result.rows[0];
+}
+
+export async function getBatteryByTokenId(tokenId: string): Promise<Battery | null> {
+    const result = await query<Battery>(
+        `SELECT * FROM public.batteries WHERE nft_token_id = $1 LIMIT 1`,
+        [tokenId]
+    );
+    if (result.rows.length === 0) return null;
+    // Map to Battery type (simplified for now, assuming partial match is enough or full mapping)
+    // The existing getBatteryStatus does full mapping. Let's reuse or duplicate minimal mapping.
+    const row = result.rows[0];
+    return {
+        id: row.id,
+        battery_code: row.battery_code,
+        brand: row.brand,
+        initial_capacity: row.initial_capacity,
+        current_capacity: row.current_capacity,
+        manufacture_year: row.manufacture_year,
+        charging_cycles: row.charging_cycles,
+        nft_token_id: row.nft_token_id,
+        minted: row.minted,
+        created_at: row.created_at
+    };
+}
+
+export async function updateBatteryBurnStatus(tokenId: string): Promise<void> {
+    await query(
+        `UPDATE public.batteries SET minted = false, nft_token_id = NULL WHERE nft_token_id = $1`,
+        [tokenId]
+    );
+}
+

@@ -10,6 +10,7 @@ import walletRoutes from './routes/wallet.routes';
 import nftRoutes from './routes/nft.routes';
 import { errorHandler } from './middleware/errorHandler';
 import logger from './utils/logger';
+import cors from 'cors';
 const cwd = process.cwd();
 dotenv.config({ path: path.resolve(cwd, '.env') });
 if (cwd.endsWith('backend-express')) {
@@ -17,7 +18,7 @@ if (cwd.endsWith('backend-express')) {
 }
 
 const app = express();
-
+app.use(cors({ origin: "http://localhost:3001" }));
 app.use(express.json());
 
 app.use((req, res, next) => {
