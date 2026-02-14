@@ -1,122 +1,76 @@
+BEGIN;
 
+-- ========================
+-- USERS
+-- ========================
 INSERT INTO public.users (id, email, wallet_address, name)
 VALUES
-(
-    gen_random_uuid(),
-    'alice@example.com',
-    '0xA1B2C3D4E5',
-    'Alice'
-),
-(
-    gen_random_uuid(),
-    'bob@example.com',
-    '0xF6G7H8I9J0',
-    'Bob'
-),
-(
-    gen_random_uuid(),
-    'charlie@example.com',
-    NULL,
-    'Charlie'
-);
+(gen_random_uuid(), 'alice@example.com', '0xAAA111', 'Alice'),
+(gen_random_uuid(), 'bob@example.com',   '0xBBB222', 'Bob'),
+(gen_random_uuid(), 'charlie@example.com', NULL,    'Charlie');
 
-
+-- ========================
+-- BATTERIES
+-- ========================
 INSERT INTO public.batteries (
-    id,
-    battery_code,
-    brand,
-    initial_capacity,
-    current_capacity,
-    manufacture_year,
-    charging_cycles,
-    nft_token_id,
-    minted
+    id, battery_code, brand,
+    initial_capacity, current_capacity,
+    manufacture_year, charging_cycles,
+    nft_token_id, minted
 )
 VALUES
-(
-    gen_random_uuid(),
-    'BAT-001',
-    'Tesla',
-    75.00,
-    68.40,
-    2021,
-    420,
-    'NFT-1001',
-    true
-),
-(
-    gen_random_uuid(),
-    'BAT-002',
-    'Panasonic',
-    60.00,
-    52.10,
-    2020,
-    610,
-    NULL,
-    false
-),
-(
-    gen_random_uuid(),
-    'BAT-003',
-    'LG',
-    45.00,
-    40.20,
-    2022,
-    210,
-    NULL,
-    false
-);
+(gen_random_uuid(), 'BAT-001', 'Tesla',     75.00, 68.40, 2021, 420, 'NFT-1001', true),
+(gen_random_uuid(), 'BAT-002', 'Panasonic', 60.00, 52.10, 2020, 610, NULL, false),
+(gen_random_uuid(), 'BAT-003', 'LG',        45.00, 40.20, 2022, 210, NULL, false);
 
 -- ========================
 -- LISTINGS
 -- ========================
 INSERT INTO public.listings (
-    id,
-    battery_id,
-    seller_id,
-    price,
-    predicted_voltage,
-    user_voltage,
-    health_score,
-    status,
-    ai_verified
+    id, battery_id, seller_id,
+    price, predicted_voltage, user_voltage,
+    health_score, status, ai_verified
 )
 SELECT
     gen_random_uuid(),
     b.id,
     u.id,
-    p.price,
-    p.predicted_voltage,
-    p.user_voltage,
-    p.health_score,
-    p.status,
-    p.ai_verified
+    l.price,
+    l.predicted_voltage,
+    l.user_voltage,
+    l.health_score,
+    l.status,
+    l.ai_verified
 FROM
 (
     SELECT
         12000.00 AS price,
-        380.50 AS predicted_voltage,
-        375.20 AS user_voltage,
+        380.5 AS predicted_voltage,
+        375.2 AS user_voltage,
         91.5 AS health_score,
         'active' AS status,
         true AS ai_verified
+
     UNION ALL
+
     SELECT
         8900.00,
-        360.10,
-        355.40,
+        360.1,
+        355.4,
         86.2,
         'active',
         false
+
     UNION ALL
+
     SELECT
         6500.00,
-        320.00,
-        315.60,
+        320.0,
+        315.6,
         79.4,
         'draft',
         false
-) p
+) l
 JOIN public.batteries b ON true
 JOIN public.users u ON true
 LIMIT 3;
@@ -125,11 +79,9 @@ LIMIT 3;
 -- USER SURVEYS
 -- ========================
 INSERT INTO public.user_surveys (
-    id,
-    listing_id,
+    id, listing_id,
     brand_model,
-    initial_capacity,
-    current_capacity,
+    initial_capacity, current_capacity,
     years_owned,
     primary_application,
     avg_daily_usage,
@@ -139,7 +91,7 @@ INSERT INTO public.user_surveys (
 )
 SELECT
     gen_random_uuid(),
-    l.id,
+    ls.id,
     s.brand_model,
     s.initial_capacity,
     s.current_capacity,
@@ -153,8 +105,8 @@ FROM
 (
     SELECT
         'Tesla Model X Pack' AS brand_model,
-        75.00 AS initial_capacity,
-        68.40 AS current_capacity,
+        75.0 AS initial_capacity,
+        68.4 AS current_capacity,
         3 AS years_owned,
         'E-car' AS primary_application,
         'Heavy' AS avg_daily_usage,
@@ -166,8 +118,8 @@ FROM
 
     SELECT
         'Panasonic EB-60',
-        60.00,
-        52.10,
+        60.0,
+        52.1,
         4,
         'E-bike',
         'Medium',
@@ -179,8 +131,8 @@ FROM
 
     SELECT
         'LG PowerCell',
-        45.00,
-        40.20,
+        45.0,
+        40.2,
         2,
         'E-bike',
         'Light',
@@ -188,20 +140,16 @@ FROM
         'Always Full',
         26.8
 ) s
-JOIN public.listings l ON true
+JOIN public.listings ls ON true
 LIMIT 3;
 
 -- ========================
 -- BATTERY HISTORY
 -- ========================
 INSERT INTO public.battery_history (
-    id,
-    battery_id,
-    event_type,
-    voltage,
-    soh_percent,
-    notes,
-    ipfs_hash
+    id, battery_id,
+    event_type, voltage, soh_percent,
+    notes, ipfs_hash
 )
 SELECT
     gen_random_uuid(),
@@ -215,7 +163,7 @@ FROM
 (
     SELECT
         'inspection' AS event_type,
-        375.40 AS voltage,
+        375.4 AS voltage,
         92.1 AS soh_percent,
         'Initial inspection passed' AS notes,
         'QmABC123' AS ipfs_hash
@@ -224,16 +172,16 @@ FROM
 
     SELECT
         'maintenance',
-        360.20,
+        360.2,
         88.5,
-        'Minor cell balancing',
+        'Minor balancing',
         'QmDEF456'
 
     UNION ALL
 
     SELECT
         'resale_check',
-        315.60,
+        315.6,
         79.4,
         'Resale certification',
         'QmXYZ789'
@@ -245,12 +193,8 @@ LIMIT 3;
 -- OCR RECORDS
 -- ========================
 INSERT INTO public.ocr_records (
-    id,
-    user_id,
-    battery_id,
-    image_url,
-    extracted_text,
-    confidence_score
+    id, user_id, battery_id,
+    image_url, extracted_text, confidence_score
 )
 SELECT
     gen_random_uuid(),
@@ -285,11 +229,10 @@ JOIN public.batteries b ON true
 LIMIT 3;
 
 -- ========================
--- AI EVALUATIONS
+-- AI EVALUATIONS (FIXED)
 -- ========================
 INSERT INTO public.ai_evaluations (
-    id,
-    listing_id,
+    id, listing_id,
     predicted_voltage,
     predicted_soh,
     error_margin,
@@ -309,17 +252,17 @@ SELECT
 FROM
 (
     SELECT
-        378.10 AS predicted_voltage,
+        378.1 AS predicted_voltage,
         92.0 AS predicted_soh,
         1.5 AS error_margin,
-        'Battery health is above market average',
-        'Approved',
-        95.2
+        'Battery health above average' AS explanation,
+        'Approved' AS llm_verdict,
+        95.2 AS confidence_score
 
     UNION ALL
 
     SELECT
-        359.50,
+        359.5,
         87.0,
         2.1,
         'Minor degradation detected',
@@ -329,7 +272,7 @@ FROM
     UNION ALL
 
     SELECT
-        318.00,
+        318.0,
         78.5,
         3.8,
         'Significant wear detected',
@@ -343,11 +286,8 @@ LIMIT 3;
 -- LISTING IMAGES
 -- ========================
 INSERT INTO public.listing_images (
-    id,
-    listing_id,
-    image_url,
-    image_type,
-    position
+    id, listing_id,
+    image_url, image_type, position
 )
 SELECT
     gen_random_uuid(),
@@ -383,8 +323,7 @@ LIMIT 3;
 -- USER WALLETS
 -- ========================
 INSERT INTO public.user_wallets (
-    id,
-    user_id,
+    id, user_id,
     wallet_address,
     encrypted_private_key,
     wallet_type,
@@ -400,16 +339,16 @@ SELECT
 FROM
 (
     SELECT
-        '0xAAA111BBB222',
-        'ENCRYPTED_KEY_1',
-        'custodial',
-        true
+        '0xAAA111BBB222' AS wallet_address,
+        'ENC_KEY_1' AS encrypted_private_key,
+        'custodial' AS wallet_type,
+        true AS is_primary
 
     UNION ALL
 
     SELECT
         '0xCCC333DDD444',
-        'ENCRYPTED_KEY_2',
+        'ENC_KEY_2',
         'external',
         false
 
@@ -417,9 +356,11 @@ FROM
 
     SELECT
         '0xEEE555FFF666',
-        'ENCRYPTED_KEY_3',
+        'ENC_KEY_3',
         'external',
         true
-) w(wallet_address, encrypted_private_key, wallet_type, is_primary)
+) w
 JOIN public.users u ON true
 LIMIT 3;
+
+COMMIT;
