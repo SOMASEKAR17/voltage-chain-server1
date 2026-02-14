@@ -148,3 +148,21 @@ export interface CapacityPredictionResponse {
         api_key_used?: string;
     };
 }
+
+/** Request body for POST /api/predict/predict-rul (accepts questionnaire data directly) */
+export interface PredictRulRequestBody {
+    questionnaire: QuestionnaireData;
+    battery?: {
+        charging_cycles?: number;
+    };
+}
+
+/** Request body for POST /api/predict/predict-capacity-survey (accepts questionnaire data directly) */
+export interface PredictCapacitySurveyRequestBody extends QuestionnaireData {
+    // All fields from QuestionnaireData
+}
+
+/** Request body for POST /api/predict/predict-full (accepts questionnaire data directly) */
+export interface PredictFullRequestBody extends QuestionnaireData {
+    // All fields from QuestionnaireData
+}

@@ -100,4 +100,5 @@ public/uploads/
 
 .env
 
-voltage-chain-server2
+fastapi
+
