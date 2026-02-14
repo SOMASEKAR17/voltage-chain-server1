@@ -45,6 +45,7 @@ export interface ListBatteryResponse {
         nft_token_id?: string;
         is_new_nft: boolean;
         listing_url: string;
+        txHash?: string;
     };
 }
 export interface OCRResponse {

@@ -9,7 +9,8 @@ const ABI = [
   "function tokenURI(uint256 tokenId) view returns (string)",
   "function ownerOf(uint256 tokenId) view returns (address)",
   "function nextTokenId() view returns (uint256)",
-  "function safeTransferFrom(address from, address to, uint256 tokenId)"
+  "function safeTransferFrom(address from, address to, uint256 tokenId)",
+  "event Transfer(address indexed from, address indexed to, uint256 indexed tokenId)"
 ];
 
 let contract: ethers.Contract | null = null;
